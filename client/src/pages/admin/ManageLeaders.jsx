@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Camera, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { db } from '@/services/firebase';
-import { uploadImageToImgBB } from '@/services/imgbbService';
+import ImageUploadWithCompression from '@/components/admin/ImageUploadWithCompression';
 import { LEADERS_DATA } from '@/data/leadersData';
 
 const ManageLeaders = () => {
@@ -16,19 +16,6 @@ const ManageLeaders = () => {
   }, []);
 
   const updateField = (leaderId, field, value) => setLeaders((items) => items.map((leader) => leader.id === leaderId ? { ...leader, [field]: value } : leader));
-
-  const handlePhotoUpload = async (leaderId, file) => {
-    setUploading((state) => ({ ...state, [leaderId]: 0 }));
-    try {
-      const result = await uploadImageToImgBB(file, (progress) => setUploading((state) => ({ ...state, [leaderId]: progress })));
-      updateField(leaderId, 'photo', result.url);
-      toast.success('Photo uploaded');
-    } catch {
-      toast.error('Photo upload failed');
-    } finally {
-      setUploading((state) => ({ ...state, [leaderId]: null }));
-    }
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -54,12 +41,17 @@ const ManageLeaders = () => {
             <div className="mb-5 flex items-center gap-4 border-b border-slate-100 pb-4">
               <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-yellow-300 bg-slate-100 shadow">
                 <img src={leader.photo} alt={leader.name_en} className="h-full w-full object-cover object-top" />
-                <label className="absolute bottom-1 right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-tdp-red text-white shadow">
-                  <Camera size={15} />
-                  <input type="file" accept="image/*" hidden onChange={(event) => event.target.files?.[0] && handlePhotoUpload(leader.id, event.target.files[0])} />
-                </label>
               </div>
-              <div className="min-w-0 flex-1"><h2 className="text-lg font-black text-slate-950">{leader.name_en}</h2><p className="text-sm text-slate-500">{leader.designation_en}</p>{uploading[leader.id] !== null && uploading[leader.id] !== undefined && <div className="mt-3 h-2 max-w-xs rounded-full bg-slate-100"><div className="h-2 rounded-full bg-tdp-yellow" style={{ width: `${uploading[leader.id]}%` }} /></div>}</div>
+              <div className="min-w-0 flex-1"><h2 className="text-lg font-black text-slate-950">{leader.name_en}</h2><p className="text-sm text-slate-500">{leader.designation_en}</p>{uploading[leader.id] && <p className="mt-2 text-xs font-bold text-yellow-700">Compressing leader photo...</p>}</div>
+            </div>
+            <div className="mb-5">
+              <ImageUploadWithCompression
+                label={`${leader.name_en || 'Leader'} photo`}
+                value={leader.photo || ''}
+                aspectRatio="1/1"
+                onUploadStateChange={(busy) => setUploading((state) => ({ ...state, [leader.id]: busy }))}
+                onChange={(url) => updateField(leader.id, 'photo', url)}
+              />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {[
