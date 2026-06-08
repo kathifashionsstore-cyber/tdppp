@@ -26,7 +26,7 @@ const FestivalBannersSection = () => {
   }, []);
 
   return (
-    <section id="festival-banners" className="bg-gradient-to-r from-[#0d1457] via-[#1a237e] to-[#0d1457] py-14 text-white">
+    <section id="festivals" className="scroll-mt-24 bg-gradient-to-r from-[#0d1457] via-[#1a237e] to-[#0d1457] py-14 text-white">
       <div className="container-page">
         <div className="text-center">
           <div className="mx-auto flex w-max items-center gap-3 rounded-full border border-yellow-300/30 bg-white/10 px-4 py-2">

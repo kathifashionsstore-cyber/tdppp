@@ -9,6 +9,7 @@ import { useCollection, useCrud } from '@/hooks/useFirestore';
 import { CATEGORIES } from '@/utils/constants';
 import { autoIndexContent } from '@/services/chatbotService';
 import { translatePayloadFields } from '@/services/translationService';
+import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/utils/helpers';
 
 const tomorrow = () => {
   const date = new Date();
@@ -37,8 +38,10 @@ const emptyByType = (type) => ({
   showOnce: true,
   order: 1,
   linkUrl: '',
+  applyLink: '',
   mapEmbedUrl: '',
   videoUrl: '',
+  tag: '',
   startDate: new Date(),
   endDate: type === 'festivalBanners' ? tomorrow() : new Date()
 });
@@ -55,7 +58,9 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
   const label = type === 'towns' ? 'Name' : 'Title';
 
   const normalizePayload = async () => {
-    const imageValue = form.image || form.thumbnail || form.images?.[0] || '';
+    const youtubeThumbnail = collectionName === 'news' ? getYouTubeThumbnailUrl(form.videoUrl || form.url) : '';
+    const imageValue = form.image || form.thumbnail || form.images?.[0] || youtubeThumbnail || '';
+    const videoEmbedUrl = collectionName === 'news' ? getYouTubeEmbedUrl(form.videoUrl || form.url) : '';
     const fallbackTitle = collectionName === 'narasaraopetSections' && imageValue ? `Narasaraopet Photo Frame ${new Date().toLocaleDateString('en-IN')}` : '';
     const titleValue = form.title_en || form.name_en || fallbackTitle;
     const descriptionValue = form.description_en || form.content_en || form.message_en || '';
@@ -70,6 +75,9 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
       location_en: locationValue,
       image: imageValue,
       thumbnail: collectionName === 'news' ? imageValue : form.thumbnail || imageValue,
+      youtubeThumbnail,
+      videoEmbedUrl,
+      applyLink: collectionName === 'schemes' ? form.applyLink || form.linkUrl || '' : form.applyLink,
       images: form.images?.length ? form.images : imageValue ? [imageValue] : []
     };
     return translatePayloadFields(payload);
@@ -142,8 +150,10 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
             <DatePicker className="min-h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" selected={form.date || form.publishedAt || new Date()} onChange={(date) => update(collectionName === 'news' ? 'publishedAt' : 'date', date)} />
             <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Location" value={form.location_en || ''} onChange={(e) => update('location_en', e.target.value)} />
             {collectionName === 'gallery' && form.type === 'video' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Paste YouTube video link" value={form.url || ''} onChange={(e) => update('url', e.target.value)} />}
-            {collectionName === 'news' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Optional YouTube video link" value={form.videoUrl || ''} onChange={(e) => update('videoUrl', e.target.value)} />}
+            {collectionName === 'news' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="YouTube video link, e.g. https://www.youtube.com/watch?v=xxxxx" value={form.videoUrl || ''} onChange={(e) => update('videoUrl', e.target.value)} />}
+            {collectionName === 'news' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Tag, e.g. Meeting, Development, Press Meet" value={form.tag || ''} onChange={(e) => update('tag', e.target.value)} />}
             {collectionName === 'announcements' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Optional link URL, e.g. tel:9398724704" value={form.linkUrl || ''} onChange={(e) => update('linkUrl', e.target.value)} />}
+            {collectionName === 'schemes' && <input type="url" className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Apply link, e.g. https://official-portal.gov.in/apply" value={form.applyLink || form.linkUrl || ''} onChange={(e) => update('applyLink', e.target.value)} />}
             {collectionName === 'narasaraopetSections' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Optional Google Maps embed URL" value={form.mapEmbedUrl || ''} onChange={(e) => update('mapEmbedUrl', e.target.value)} />}
             {collectionName === 'narasaraopetSections' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Optional video URL" value={form.videoUrl || ''} onChange={(e) => update('videoUrl', e.target.value)} />}
             {['narasaraopetSections', 'announcements'].includes(collectionName) && <input type="number" className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Display order" value={form.order || 1} onChange={(e) => update('order', Number(e.target.value))} />}

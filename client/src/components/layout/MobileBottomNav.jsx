@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarCheck, Home, Menu, Newspaper, Phone, Star, X } from 'lucide-react';
+import { CalendarCheck, Menu, Newspaper, Phone, Star, X } from 'lucide-react';
 
 const drawerLinks = [
-  { hash: '#home', label: 'Home' },
-  { hash: '#news', label: 'News' },
-  { hash: '#daily', label: 'Daily Works' },
-  { hash: '#leader', label: 'Leader' },
-  { hash: '#narasaraopet', label: 'Narasaraopet' },
-  { hash: '#festivals', label: 'Festival Banners' },
-  { hash: '#donate', label: 'Donate' },
-  { hash: '#contact', label: 'Contact' }
+  { hash: '#home', tab: 'home', label: 'Home' },
+  { hash: '#graphs', tab: 'super6', label: 'Super 6 Progress' },
+  { hash: '#news', tab: 'news', label: 'News' },
+  { hash: '#daily', tab: 'daily', label: 'Daily Works' },
+  { hash: '#leader', tab: 'leader', label: 'Leader' },
+  { hash: '#narasaraopet', tab: 'narasaraopet', label: 'Narasaraopet' },
+  { hash: '#festivals', tab: 'festivals', label: 'Festival Banners' },
+  { hash: '#donate', tab: 'donate', label: 'Donate' },
+  { hash: '#contact', tab: 'contact', label: 'Contact' }
 ];
 
 const MobileBottomNav = () => {
@@ -35,12 +36,6 @@ const MobileBottomNav = () => {
     }
 
     scrollToHash(hash);
-  };
-
-  const goRoute = (path, tab) => {
-    setMenuOpen(false);
-    setActiveTab(tab);
-    navigate(path);
   };
 
   useEffect(() => {
@@ -76,7 +71,7 @@ const MobileBottomNav = () => {
           />
         </svg>
         <div className="tab-items-row">
-          <Tab icon={Star} label="Super 6" active={location.pathname === '/super6' || activeTab === 'super6'} badge="6" onClick={() => goRoute('/super6', 'super6')} />
+          <Tab icon={Star} label="Super 6" active={activeTab === 'super6'} badge="6" onClick={() => jump('#graphs', 'super6')} />
           <Tab icon={Newspaper} label="News" active={activeTab === 'news'} onClick={() => jump('#news', 'news')} />
           <div className="tab-home-container">
             <button
@@ -107,7 +102,7 @@ const MobileBottomNav = () => {
           </div>
           <nav className="drawer-nav">
             {drawerLinks.map((item) => (
-              <button key={item.hash} type="button" className="drawer-link w-full text-left" onClick={() => jump(item.hash, item.hash.slice(1))}>
+              <button key={item.hash} type="button" className="drawer-link w-full text-left" onClick={() => jump(item.hash, item.tab)}>
                 {item.label}
               </button>
             ))}

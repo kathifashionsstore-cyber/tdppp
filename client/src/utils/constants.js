@@ -33,7 +33,7 @@ export const CATEGORIES = {
   news: ['party', 'government', 'local', 'national', 'welfare'],
   gallery: ['events', 'development', 'meetings', 'welfare', 'festivals'],
   achievements: ['infrastructure', 'welfare', 'health', 'education', 'agriculture', 'sports', 'digital'],
-  schemes: ['central', 'state', 'local'],
+  schemes: ['agriculture', 'women', 'youth', 'health', 'housing', 'education'],
   super6Schemes: ['women', 'farmers', 'youth', 'education', 'household', 'welfare'],
   towns: ['town', 'mandal', 'village'],
   festivalBanners: ['festival', 'occasion', 'party-event'],

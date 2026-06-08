@@ -16,7 +16,7 @@ const News = () => {
 
   const filtered = useMemo(() => data.filter((item) => {
     const okCategory = category === 'all' || item.category === category;
-    const haystack = normalizeSearch(`${getLangField(item, 'title', language)} ${getLangField(item, 'content', language)} ${item.category || ''}`);
+    const haystack = normalizeSearch(`${getLangField(item, 'title', language)} ${getLangField(item, 'content', language)} ${item.category || ''} ${item.tag || ''}`);
     return okCategory && (!search || haystack.includes(normalizeSearch(search)));
   }), [category, data, language, search]);
 
