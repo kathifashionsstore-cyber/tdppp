@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, PlayCircle, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, PlayCircle } from 'lucide-react';
 import PageHero from './PageHero';
 import { useCollection } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
@@ -12,23 +12,23 @@ const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   order: index + 1,
   title_en: scheme.nameEn,
   title_te: scheme.nameTe,
-  description_en: scheme.description,
-  description_te: scheme.description,
-  readMore_en: [scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
-  readMore_te: [scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
+  shortDescription_en: scheme.description,
+  shortDescription_te: scheme.description,
+  description_en: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
+  description_te: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
   thumbnail: scheme.image,
   image: scheme.image,
-  videos: scheme.videoSrc ? [scheme.videoSrc] : [],
-  isPublished: true
+  videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
+  isPublished: true,
+  isActive: true
 }));
 
 const Super6 = () => {
   const { language } = useLanguage();
-  const [active, setActive] = useState(null);
-  const { data = [], isLoading } = useCollection('super6Schemes', { publishedOnly: true, orderByField: 'order', orderDirection: 'asc' });
+  const { data = [], isLoading } = useCollection('super6Schemes', { publishedOnly: true, activeOnly: true, orderByField: 'order', orderDirection: 'asc' });
   const schemes = useMemo(() => {
     const adminItems = data.length ? data : buildFallback();
-    return adminItems.slice(0, 6);
+    return adminItems.sort((a, b) => (a.order || 99) - (b.order || 99)).slice(0, 6);
   }, [data]);
 
   return (
@@ -38,81 +38,95 @@ const Super6 = () => {
         <div className="container-page">
           <div className="mb-7 max-w-3xl">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-tdp-red">Dedicated Super 6 Page</p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950 md:text-4xl">Six schemes, clear details, videos, and updates</h2>
-            <p className="mt-3 leading-7 text-slate-600">Each entry is managed from the Super 6 admin panel and remains separate from general government schemes.</p>
+            <h2 className="mt-2 text-3xl font-black text-slate-950 md:text-4xl">Six schemes, clear details, and inline videos</h2>
+            <p className="mt-3 leading-7 text-slate-600">This page is managed from the Super 6 admin panel and remains completely separate from General Schemes.</p>
           </div>
           {isLoading && !data.length && <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm font-bold text-yellow-900">Loading admin Super 6 entries. Showing built-in defaults until Firebase responds.</div>}
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {schemes.map((scheme, index) => (
-              <motion.article
-                key={scheme.id || index}
-                initial={{ opacity: 0, y: 18 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
-                transition={{ delay: index * 0.04 }}
-                className="group overflow-hidden rounded-lg border border-yellow-200 bg-white shadow-md transition hover:-translate-y-1 hover:shadow-xl"
-              >
-                <div className="relative aspect-[4/3] overflow-hidden bg-yellow-50">
-                  <img src={scheme.thumbnail || scheme.image || scheme.images?.[0] || '/og-image.svg'} alt={getLangField(scheme, 'title', language)} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                  <span className="absolute left-3 top-3 rounded-full bg-tdp-yellow px-3 py-1 text-xs font-black text-tdp-red">Super 6.{index + 1}</span>
-                </div>
-                <div className="p-5">
-                  <h3 className="line-clamp-2 text-xl font-black leading-tight text-slate-950">{getLangField(scheme, 'title', language)}</h3>
-                  <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{excerpt(getLangField(scheme, 'shortDescription', language) || getLangField(scheme, 'description', language), 135)}</p>
-                  <button type="button" onClick={() => setActive(scheme)} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-tdp-red px-4 py-2 text-sm font-black text-white shadow-red">
-                    Read More <ArrowRight size={16} />
-                  </button>
-                </div>
-              </motion.article>
-            ))}
+          <div className="grid items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {schemes.map((scheme, index) => <Super6Card key={scheme.id || index} scheme={scheme} index={index} language={language} />)}
           </div>
         </div>
       </section>
-      <Super6Modal item={active} language={language} onClose={() => setActive(null)} />
     </>
   );
 };
 
-const Super6Modal = ({ item, language, onClose }) => {
-  if (!item) return null;
-  const title = getLangField(item, 'title', language);
-  const details = getLangField(item, 'readMore', language) || getLangField(item, 'description', language);
-  const videos = (item.videos || item.videoUrls || []).filter(Boolean);
+const Super6Card = ({ scheme, index, language }) => {
+  const [expanded, setExpanded] = useState(false);
+  const title = getLangField(scheme, 'title', language);
+  const shortDescription = getLangField(scheme, 'shortDescription', language) || getLangField(scheme, 'description', language);
+  const fullDescription = getLangField(scheme, 'readMore', language) || getLangField(scheme, 'description', language);
+  const image = scheme.thumbnail || scheme.image || scheme.images?.[0] || '/og-image.svg';
 
   return (
-    <AnimatePresence>
-      <motion.div className="fixed inset-0 z-[9998] grid place-items-center bg-slate-950/82 p-3 backdrop-blur-sm md:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-        <motion.article className="relative max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-lg bg-white shadow-2xl" initial={{ y: 26, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 18, opacity: 0, scale: 0.98 }} onClick={(event) => event.stopPropagation()}>
-          <button type="button" onClick={onClose} className="absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-white text-slate-950 shadow-lg" aria-label="Close Super 6 details"><X size={19} /></button>
-          <div className="grid md:grid-cols-[0.85fr_1.15fr]">
-            <div className="bg-slate-950">
-              <img src={item.thumbnail || item.image || item.images?.[0] || '/og-image.svg'} alt={title} className="h-full max-h-[42vh] w-full object-cover md:max-h-none" />
+    <motion.article
+      initial={{ opacity: 0, y: 28 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.25) }}
+      className="group overflow-hidden rounded-lg border border-yellow-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.10)] transition hover:-translate-y-1 hover:border-yellow-300 hover:shadow-[0_18px_42px_rgba(245,166,35,0.22)]"
+    >
+      <div className="relative aspect-video overflow-hidden bg-yellow-50">
+        <img src={image} alt={title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading={index === 0 ? 'eager' : 'lazy'} />
+        <span className="absolute left-3 top-3 rounded-full bg-tdp-yellow px-3 py-1 text-xs font-black text-tdp-red shadow">Super 6.{index + 1}</span>
+      </div>
+      <div className="p-5">
+        <h3 className="line-clamp-2 text-xl font-black leading-tight text-slate-950">{title}</h3>
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{excerpt(shortDescription, 150)}</p>
+        <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-tdp-yellow px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-tdp-navy shadow-[0_8px_22px_rgba(245,166,35,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(245,166,35,0.55)]">
+          {expanded ? 'Close' : 'Read More'} {expanded ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+        </button>
+      </div>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.28 }} className="overflow-hidden border-t border-yellow-200 bg-yellow-50/55">
+            <div className="p-5">
+              <div className="prose-content rounded-lg border border-yellow-200 bg-white p-4 leading-7 text-slate-700 shadow-sm" dangerouslySetInnerHTML={sanitizeHtml(fullDescription)} />
+              <InlineVideoPlaylist videos={normalizeVideos(scheme.videos || scheme.videoUrls)} poster={image} />
+              <button type="button" onClick={() => setExpanded(false)} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-300 bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-tdp-red shadow-sm">
+                Close <ArrowUp size={16} />
+              </button>
             </div>
-            <div className="p-5 md:p-8">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-tdp-red">Super 6 Scheme</p>
-              <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 md:text-5xl">{title}</h2>
-              <div className="prose-content mt-5 rounded-lg bg-yellow-50 p-5 leading-8 text-slate-700" dangerouslySetInnerHTML={sanitizeHtml(details)} />
-              <div className="mt-6">
-                <div className="mb-3 flex items-center gap-2">
-                  <PlayCircle className="text-tdp-red" />
-                  <h3 className="text-xl font-black text-slate-950">Videos</h3>
-                </div>
-                {videos.length ? (
-                  <div className="grid gap-4">
-                    {videos.map((url, index) => (
-                      <video key={`${url}-${index}`} controls preload="metadata" poster={item.thumbnail || item.image || item.images?.[0]} className="aspect-video w-full rounded-lg bg-slate-950 shadow-sm">
-                        <source src={url} />
-                      </video>
-                    ))}
-                  </div>
-                ) : <div className="rounded-lg border border-dashed border-slate-200 p-5 text-sm font-semibold text-slate-500">No videos added yet.</div>}
-              </div>
-            </div>
-          </div>
-        </motion.article>
-      </motion.div>
-    </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.article>
   );
 };
+
+const InlineVideoPlaylist = ({ videos, poster }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const active = videos[activeIndex];
+
+  if (!videos.length) {
+    return <div className="mt-5 rounded-lg border border-dashed border-yellow-300 bg-white p-5 text-sm font-semibold text-slate-500">No videos added yet.</div>;
+  }
+
+  return (
+    <div className="mt-5 rounded-lg border border-slate-900 bg-slate-950 p-3 shadow-xl">
+      <div className="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-[0.12em] text-tdp-yellow">
+        <PlayCircle size={18} /> Video Player
+      </div>
+      <video key={active.url} controls preload="metadata" poster={poster} className="aspect-video w-full rounded-lg bg-black accent-yellow-400">
+        <source src={active.url} />
+      </video>
+      <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+        {videos.map((video, index) => (
+          <button key={`${video.url}-${index}`} type="button" onClick={() => setActiveIndex(index)} className={`min-w-[132px] rounded-lg border p-2 text-left transition ${index === activeIndex ? 'border-tdp-yellow bg-tdp-yellow text-slate-950' : 'border-white/15 bg-white/8 text-white hover:bg-white/14'}`}>
+            <span className="block aspect-video overflow-hidden rounded bg-black/40">
+              <img src={poster} alt="" className="h-full w-full object-cover opacity-80" loading="lazy" />
+            </span>
+            <span className="mt-2 line-clamp-2 block text-xs font-black">{video.title}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const normalizeVideos = (videos = []) => videos.filter(Boolean).map((video, index) => {
+  if (typeof video === 'string') return { title: `Video ${index + 1}`, url: video };
+  return { title: video.title || `Video ${index + 1}`, url: video.url || video.src || '' };
+}).filter((video) => video.url);
 
 export default Super6;

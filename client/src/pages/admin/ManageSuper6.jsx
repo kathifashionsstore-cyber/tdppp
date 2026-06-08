@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Save, Trash2, XCircle } from 'lucide-react';
+import { Eye, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import ContentTable from '@/components/admin/ContentTable';
 import ImageUploader from '@/components/admin/ImageUploader';
 import RichTextEditor from '@/components/admin/RichTextEditor';
@@ -31,7 +31,7 @@ const ManageSuper6 = () => {
   const crud = useCrud('super6Schemes');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
-  const [videoDraft, setVideoDraft] = useState('');
+  const [videoDraft, setVideoDraft] = useState({ title: '', url: '' });
   const [imageUploading, setImageUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -40,31 +40,31 @@ const ManageSuper6 = () => {
 
   const edit = (item) => {
     setEditing(item.id);
-    setForm({ ...emptyForm(), ...item, videos: item.videos || item.videoUrls || [] });
-    setVideoDraft('');
+    setForm({ ...emptyForm(), ...item, videos: normalizeVideos(item.videos || item.videoUrls || []) });
+    setVideoDraft({ title: '', url: '' });
   };
 
   const reset = () => {
     setEditing(null);
     setForm(emptyForm());
-    setVideoDraft('');
+    setVideoDraft({ title: '', url: '' });
   };
 
   const addVideo = () => {
-    const value = videoDraft.trim();
-    if (!value) return;
-    update('videos', [...(form.videos || []), value]);
-    setVideoDraft('');
+    const url = videoDraft.url.trim();
+    if (!url) return;
+    update('videos', [...normalizeVideos(form.videos), { title: videoDraft.title.trim() || `Video ${normalizeVideos(form.videos).length + 1}`, url }]);
+    setVideoDraft({ title: '', url: '' });
   };
 
   const addLocalPreview = (files) => {
-    const urls = Array.from(files || []).map((file) => URL.createObjectURL(file));
-    if (urls.length) update('videos', [...(form.videos || []), ...urls]);
+    const previews = Array.from(files || []).map((file) => ({ title: file.name.replace(/\.[^/.]+$/, ''), url: URL.createObjectURL(file), previewOnly: true }));
+    if (previews.length) update('videos', [...normalizeVideos(form.videos), ...previews]);
   };
 
   useEffect(() => () => {
-    (form.videos || []).forEach((url) => {
-      if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
+    normalizeVideos(form.videos).forEach((video) => {
+      if (String(video.url).startsWith('blob:')) URL.revokeObjectURL(video.url);
     });
   }, [form.videos]);
 
@@ -83,7 +83,7 @@ const ManageSuper6 = () => {
         thumbnail: scheme.image,
         image: scheme.image,
         images: [scheme.image],
-        videos: scheme.videoSrc ? [scheme.videoSrc] : [],
+        videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
         order: index + 1,
         isPublished: true,
         isActive: true
@@ -106,7 +106,7 @@ const ManageSuper6 = () => {
         image,
         thumbnail: form.thumbnail || image,
         images: form.images?.length ? form.images : image ? [image] : [],
-        videos: (form.videos || []).filter(Boolean).filter((url) => !String(url).startsWith('blob:'))
+        videos: normalizeVideos(form.videos).filter((video) => video.url && !String(video.url).startsWith('blob:')).map(({ title, url }) => ({ title, url }))
       });
       if (editing) await crud.update.mutateAsync({ id: editing, data: payload });
       else await crud.create.mutateAsync(payload);
@@ -158,9 +158,10 @@ const ManageSuper6 = () => {
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-black text-slate-950">Videos</p>
-          <p className="mt-1 text-xs text-slate-500">Use deployed paths like /videos/scheme.mp4 or hosted video URLs for permanent playback. Local file selection previews immediately but is not saved.</p>
-          <div className="mt-3 flex flex-col gap-2 md:flex-row">
-            <input className="min-h-11 flex-1 rounded-lg border border-slate-200 px-3 outline-none focus:border-tdp-yellow" placeholder="/videos/super6.mp4 or https://..." value={videoDraft} onChange={(event) => setVideoDraft(event.target.value)} />
+          <p className="mt-1 text-xs text-slate-500">Use deployed paths like /videos/scheme.mp4 or hosted video URLs for permanent playback. Local file selection previews immediately but needs video storage to persist after reload.</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-[180px_1fr_auto_auto]">
+            <input className="min-h-11 rounded-lg border border-slate-200 px-3 outline-none focus:border-tdp-yellow" placeholder="Video title" value={videoDraft.title} onChange={(event) => setVideoDraft((state) => ({ ...state, title: event.target.value }))} />
+            <input className="min-h-11 rounded-lg border border-slate-200 px-3 outline-none focus:border-tdp-yellow" placeholder="/videos/super6.mp4 or https://..." value={videoDraft.url} onChange={(event) => setVideoDraft((state) => ({ ...state, url: event.target.value }))} />
             <button type="button" onClick={addVideo} className="inline-flex items-center justify-center gap-2 rounded-lg bg-tdp-red px-4 py-2 text-sm font-black text-white"><Plus size={16} /> Add URL</button>
             <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700">
               Local Preview
@@ -169,14 +170,27 @@ const ManageSuper6 = () => {
           </div>
           {!!form.videos?.length && (
             <div className="mt-4 grid gap-2">
-              {form.videos.map((url, index) => (
-                <div key={`${url}-${index}`} className="flex items-center justify-between gap-3 rounded-lg bg-white p-3 text-sm">
-                  <span className="min-w-0 truncate font-semibold text-slate-700">{url}</span>
+              {normalizeVideos(form.videos).map((video, index) => (
+                <div key={`${video.url}-${index}`} className="grid gap-3 rounded-lg bg-white p-3 text-sm md:grid-cols-[180px_1fr_auto] md:items-center">
+                  <input className="min-h-10 rounded-lg border border-slate-200 px-3 font-semibold text-slate-700" value={video.title || ''} onChange={(event) => update('videos', normalizeVideos(form.videos).map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item))} />
+                  <span className="min-w-0 truncate font-semibold text-slate-700">{video.url}</span>
                   <button type="button" onClick={() => update('videos', form.videos.filter((_, itemIndex) => itemIndex !== index))} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-red-50 text-tdp-red" aria-label="Remove video"><Trash2 size={15} /></button>
                 </div>
               ))}
             </div>
           )}
+        </div>
+
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+          <p className="mb-3 inline-flex items-center gap-2 text-sm font-black text-slate-950"><Eye size={16} /> Card Preview</p>
+          <div className="max-w-sm overflow-hidden rounded-lg border border-yellow-300 bg-white shadow-md">
+            <div className="aspect-video bg-slate-100"><img src={form.thumbnail || form.image || form.images?.[0] || '/og-image.svg'} alt="" className="h-full w-full object-cover" /></div>
+            <div className="p-4">
+              <h3 className="line-clamp-2 text-lg font-black text-slate-950">{form.title_en || 'Super 6 Scheme Title'}</h3>
+              <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{form.shortDescription_en || 'Short description preview appears here.'}</p>
+              <span className="mt-4 inline-flex rounded-lg bg-tdp-yellow px-4 py-2 text-sm font-black text-tdp-navy">Read More</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -189,5 +203,10 @@ const ManageSuper6 = () => {
     </div>
   );
 };
+
+const normalizeVideos = (videos = []) => videos.filter(Boolean).map((video, index) => {
+  if (typeof video === 'string') return { title: `Video ${index + 1}`, url: video };
+  return { title: video.title || `Video ${index + 1}`, url: video.url || video.src || '', previewOnly: video.previewOnly };
+}).filter((video) => video.url);
 
 export default ManageSuper6;
