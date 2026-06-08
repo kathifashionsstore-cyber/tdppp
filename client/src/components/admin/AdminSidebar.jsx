@@ -7,7 +7,7 @@ const items = [
   { label: 'Home', path: '/admin/home', icon: Home },
   { label: 'About/MLA Info', path: '/admin/about', icon: Users },
   { label: 'Leaders', path: '/admin/leaders', icon: Users },
-  { label: 'Heroes', path: '/admin/hero', icon: Sparkles },
+  { label: 'Page Heroes', path: '/admin/hero', icon: Sparkles },
   { label: 'Daily Work', path: '/admin/daily-work', icon: Vote },
   { label: 'News', path: '/admin/news', icon: Newspaper },
   { label: 'Gallery', path: '/admin/gallery', icon: Images },

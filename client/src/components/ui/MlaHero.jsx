@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { DEFAULT_HERO_IMAGE } from '@/utils/constants';
+import { getLangField } from '@/utils/helpers';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const fallbackSlides = [
-  { id: 'default-mla', image: '/mla/aravinda-babu.jpg', alt_en: 'Dr. Chadalavada Aravinda Babu' },
-  { id: 'default-logo', image: '/og-image.svg', alt_en: 'Telugu Desam Party Narasaraopet' }
+  { id: 'default-mla', image: '/mla/aravinda-babu.jpg', alt_en: 'Dr. Chadalavada Aravinda Babu' }
 ];
 
 const MlaHero = ({ slides = [] }) => {
+  const { language } = useLanguage();
   const activeSlides = useMemo(() => {
     const rows = (slides || [])
-      .filter((slide) => slide?.image && slide.isActive !== false)
+      .filter((slide) => (slide?.image || slide?.imageMobile) && slide.isActive !== false)
       .sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99));
     return rows.length ? rows : fallbackSlides;
   }, [slides]);
@@ -42,12 +45,16 @@ const MlaHero = ({ slides = [] }) => {
       <div className="absolute inset-0" onTouchStart={(event) => setTouchStart(event.touches[0].clientX)} onTouchEnd={onTouchEnd}>
         {activeSlides.map((slide, slideIndex) => (
           <div key={slide.id || slide.image || slideIndex} className={`absolute inset-0 transition-opacity duration-700 ease-out ${slideIndex === index ? 'opacity-100' : 'opacity-0'}`}>
-            <img
-              src={slide.image}
-              alt={slide.alt_en || slide.label || 'Narasaraopet TDP hero slide'}
-              loading={slideIndex === 0 ? 'eager' : 'lazy'}
-              className={`h-full w-full object-cover object-center ${slideIndex === index ? 'animate-hero-kenburns' : ''}`}
-            />
+            <picture>
+              <source media="(max-width: 640px)" srcSet={slide.imageMobile || slide.image || DEFAULT_HERO_IMAGE} />
+              <source media="(min-width: 641px)" srcSet={slide.imageDesktop || slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE} />
+              <img
+                src={slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE}
+                alt={getLangField(slide, 'alt', language) || getLangField(slide, 'title', language) || slide.label || 'Narasaraopet TDP hero slide'}
+                loading={slideIndex === 0 ? 'eager' : 'lazy'}
+                className={`h-full w-full object-cover object-center ${slideIndex === index ? 'animate-hero-kenburns' : ''}`}
+              />
+            </picture>
           </div>
         ))}
       </div>
