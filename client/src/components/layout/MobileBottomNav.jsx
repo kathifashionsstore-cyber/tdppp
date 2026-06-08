@@ -8,8 +8,6 @@ const drawerLinks = [
   { hash: '#news', tab: 'news', label: 'News' },
   { hash: '#daily', tab: 'daily', label: 'Daily Works' },
   { hash: '#leader', tab: 'leader', label: 'Leader' },
-  { hash: '#narasaraopet', tab: 'narasaraopet', label: 'Narasaraopet' },
-  { hash: '#festivals', tab: 'festivals', label: 'Festival Banners' },
   { hash: '#donate', tab: 'donate', label: 'Donate' },
   { hash: '#contact', tab: 'contact', label: 'Contact' }
 ];

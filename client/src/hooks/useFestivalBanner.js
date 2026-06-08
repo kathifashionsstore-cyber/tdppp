@@ -9,6 +9,7 @@ export const useFestivalBanner = () => {
 
   useEffect(() => {
     const checkAndShowBanner = async () => {
+      if (sessionStorage.getItem('bannerSeen') === 'true') return;
       const snap = await getDocs(collection(db, 'festivalBanners'));
       const banners = snap.docs
         .map((item) => ({ id: item.id, ...item.data() }))
@@ -22,12 +23,9 @@ export const useFestivalBanner = () => {
         });
       for (const banner of banners) {
         if (isActiveDateRange(banner.startDate, banner.endDate)) {
-          const sessionKey = `bannerShown_${banner.id}`;
-          if (!sessionStorage.getItem(sessionKey)) {
-            setActiveBanner(banner);
-            setShowBanner(true);
-            break;
-          }
+          setActiveBanner(banner);
+          setShowBanner(true);
+          break;
         }
       }
     };
@@ -35,15 +33,9 @@ export const useFestivalBanner = () => {
   }, []);
 
   const closeBanner = () => {
-    if (activeBanner) sessionStorage.setItem(`bannerShown_${activeBanner.id}`, 'true');
+    sessionStorage.setItem('bannerSeen', 'true');
     setShowBanner(false);
   };
-
-  useEffect(() => {
-    if (!showBanner || !activeBanner) return undefined;
-    const timer = window.setTimeout(closeBanner, Number(activeBanner.autoCloseMs || 5000));
-    return () => window.clearTimeout(timer);
-  }, [activeBanner, showBanner]);
 
   return { showBanner, activeBanner, closeBanner };
 };

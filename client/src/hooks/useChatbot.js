@@ -1,29 +1,44 @@
-import { useMemo, useState } from 'react';
-import { useDoc } from './useFirestore';
-import { ChatbotEngine, QUICK_QUESTIONS } from '@/services/chatbotService';
+import { useEffect, useMemo, useState } from 'react';
+import { QUICK_QUESTIONS, getBotResponse, getWelcomeMessage } from '@/services/chatbotService';
 import { trackChatQuery } from '@/services/analyticsService';
 import { useLanguage } from './useLanguage';
-import { useTranslation } from 'react-i18next';
+
+const STORAGE_KEY = 'tdp-chat-history';
+
+const readHistory = (language) => {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '[]');
+    if (Array.isArray(stored) && stored.length) return stored;
+  } catch {
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+  return [{ role: 'bot', ...getWelcomeMessage(language) }];
+};
 
 export const useChatbot = () => {
   const { language } = useLanguage();
-  const { t } = useTranslation();
-  const { data } = useDoc('siteConfig', 'chatbotKnowledge');
-  const engine = useMemo(() => new ChatbotEngine(data?.knowledge || [], language), [data, language]);
-  const [messages, setMessages] = useState([{ role: 'bot', text: t('chatbot.welcome') }]);
+  const [messages, setMessages] = useState(() => readHistory(language));
   const [isTyping, setIsTyping] = useState(false);
+  const quickQuestions = useMemo(() => QUICK_QUESTIONS[language] || QUICK_QUESTIONS.en, [language]);
 
-  const sendMessage = async (text) => {
-    const clean = text.trim();
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+  }, [messages]);
+
+  const sendMessage = (text) => {
+    const clean = String(text || '').trim();
     if (!clean) return;
+
     setMessages((items) => [...items, { role: 'user', text: clean }]);
     setIsTyping(true);
-    await trackChatQuery(clean, language);
+    trackChatQuery(clean, language).catch(() => {});
+
     window.setTimeout(() => {
-      setMessages((items) => [...items, { role: 'bot', text: engine.findAnswer(clean) }]);
+      const response = getBotResponse(clean, language);
+      setMessages((items) => [...items, { role: 'bot', ...response }]);
       setIsTyping(false);
-    }, 450);
+    }, 520);
   };
 
-  return { messages, isTyping, sendMessage, quickQuestions: QUICK_QUESTIONS[language] };
+  return { messages, isTyping, sendMessage, quickQuestions };
 };

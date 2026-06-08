@@ -4,10 +4,8 @@ import WorkCard from '@/components/ui/WorkCard';
 import NewsCard from '@/components/ui/NewsCard';
 import SchemeGraphDashboard from '@/components/ui/SchemeGraphDashboard';
 import LeaderHighlightSection from '@/components/ui/LeaderHighlightSection';
-import NarasaraopetLandmarks from '@/components/ui/NarasaraopetLandmarks';
 import HomeAboutSection from '@/components/ui/HomeAboutSection';
 import VisitorCounter from '@/components/ui/VisitorCounter';
-import FestivalBannersSection from '@/components/ui/FestivalBannersSection';
 import { useCollection } from '@/hooks/useFirestore';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SkeletonGrid } from '@/components/ui/LoadingSpinner';
@@ -67,9 +65,6 @@ const Home = () => {
       <section id="leader" className="scroll-mt-24">
         <LeaderHighlightSection language={language} />
       </section>
-
-      <NarasaraopetLandmarks />
-      <FestivalBannersSection />
 
       <section className="bg-slate-950 py-12 text-white">
         <div className="container-page grid gap-5 md:grid-cols-2">

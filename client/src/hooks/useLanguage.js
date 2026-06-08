@@ -6,8 +6,12 @@ export const useLanguage = () => {
   const { language, setLanguage, toggleLanguage } = useLanguageStore();
   const { i18n } = useTranslation();
   useEffect(() => {
+    if (language !== 'te' && language !== 'en') {
+      setLanguage('en');
+      return;
+    }
     i18n.changeLanguage(language);
     document.documentElement.lang = language;
-  }, [language, i18n]);
+  }, [language, i18n, setLanguage]);
   return { language, setLanguage, toggleLanguage };
 };

@@ -2,55 +2,143 @@ import { appendChatbotKnowledge } from './firestoreService';
 import { stripHtml } from '@/utils/helpers';
 
 export const QUICK_QUESTIONS = {
-  te: ['MLA ఎవరు?', 'రోజువారీ పని ఏమిటి?', 'పట్టణ అభివృద్ధి?', 'పథకాలు ఏవి?', 'సంప్రదించడం ఎలా?'],
-  en: ['Who is the MLA?', "What is today's work?", 'Town development?', 'Available schemes?', 'How to contact?']
+  en: [
+    { label: 'About MLA', query: 'Tell me about the MLA' },
+    { label: 'Super 6 Schemes', query: 'What are Super 6 schemes?' },
+    { label: 'Contact Office', query: 'How can I contact the office?' },
+    { label: 'Narasaraopet Info', query: 'Tell me about Narasaraopet' },
+    { label: 'Latest News', query: 'Show me latest news' }
+  ],
+  te: [
+    { label: 'MLA గురించి', query: 'MLA గురించి చెప్పండి' },
+    { label: 'సూపర్ 6 పథకాలు', query: 'సూపర్ 6 పథకాలు ఏమిటి?' },
+    { label: 'ఆఫీస్ సంప్రదింపు', query: 'ఆఫీస్‌ను ఎలా సంప్రదించాలి?' },
+    { label: 'నరసరావుపేట సమాచారం', query: 'నరసరావుపేట గురించి చెప్పండి' },
+    { label: 'తాజా వార్తలు', query: 'తాజా వార్తలు చూపించండి' }
+  ]
 };
 
-const STATIC_KNOWLEDGE = {
-  te: {
-    'mla|ఎమ్మెల్యే|who|ఎవరు': 'డా. చదలవాడ అరవింద బాబు నరసారావుపేట నియోజకవర్గ ఎమ్మెల్యే. 2024 ఎన్నికలలో 19,705 ఓట్ల ఆధిక్యంతో గెలిచారు.',
-    'education|విద్య|చదువు|doctor|డాక్టర్': 'అరవింద బాబు M.S. Orthopaedics పూర్తిచేశారు - NTR విశ్వవిద్యాలయం, విజయవాడ (1992).',
-    'party|పార్టీ|tdp|తెలుగుదేశం': 'తెలుగు దేశం పార్టీ (TDP) 1982లో స్వర్గీయ N.T. రామారావు స్థాపించారు.',
-    'contact|సంప్రదించు|phone|నంబర్': 'MLA కార్యాలయం: నరసారావుపేట. WhatsApp లేదా Contact పేజీ ద్వారా సంప్రదించండి.',
-    'kotappakonda|కొటప్పకొండ|temple|గుడి': 'కొటప్పకొండ పవిత్ర క్షేత్రానికి మెరుగైన సౌకర్యాల కోసం MLA విశేష కృషి చేస్తున్నారు.',
-    'election|ఎన్నిక|votes|ఓట్లు|2024': '2024 ఎన్నికలలో డా. అరవింద బాబు 1,03,167 ఓట్లు పొంది 19,705 ఓట్ల ఆధిక్యంతో గెలిచారు.',
-    'work|పని|development|అభివృద్ధి': 'రోజువారీ పని పేజీ చూడండి - అక్కడ నరసారావుపేటలో జరుగుతున్న అభివృద్ధి పనులు ఉన్నాయి.',
-    'schemes|పథకాలు|welfare|సంక్షేమం': 'పథకాలు పేజీలో కేంద్ర, రాష్ట్ర ప్రభుత్వ పథకాల వివరాలు ఉన్నాయి.',
-    'gallery|గ్యాలరీ|photos|ఫోటోలు': 'గ్యాలరీ పేజీలో MLA పనులు, సందర్శనలు మరియు కార్యక్రమాల ఫోటోలు, వీడియోలు ఉన్నాయి.'
-  },
+const responses = {
   en: {
-    'mla|who|leader': 'Dr. Chadalavada Aravinda Babu is the MLA of Narasaraopet constituency. He won the 2024 elections with a margin of 19,705 votes.',
-    'education|doctor|qualification': 'Dr. Aravinda Babu completed M.S. Orthopaedics from NTR University of Health Sciences, Vijayawada (1992).',
-    'party|tdp|telugu desam': 'Telugu Desam Party (TDP) was founded by Late N.T. Rama Rao in 1982.',
-    'contact|phone|reach': 'Contact the MLA office in Narasaraopet via the Contact page or WhatsApp button.',
-    'kotappakonda|temple': 'Kotappakonda is a sacred pilgrimage site. The MLA is working to improve facilities for devotees.',
-    'election|votes|2024|win': 'In 2024 elections, Dr. Aravinda Babu won with 1,03,167 votes and a margin of 19,705 votes.',
-    'work|development|projects': 'Visit the Daily Work page to see ongoing and completed development works in Narasaraopet.',
-    'schemes|welfare|benefits': 'Visit the Schemes page for information on Central and State government welfare schemes.',
-    'gallery|photos|videos': "Visit the Gallery page to see photos and videos of the MLA's work, visits and programs."
+    super6: {
+      text: 'Super 6 are the flagship welfare schemes promoted by TDP for the people of Andhra Pradesh. Open the page below for the complete list and videos.',
+      link: { label: 'View Super 6 Schemes', url: '/super6' }
+    },
+    schemes: {
+      text: 'You can review government and welfare schemes on the Schemes page.',
+      link: { label: 'View All Schemes', url: '/schemes' }
+    },
+    mla: {
+      text: 'Dr. Chadalavada Aravinda Babu is the MLA of Narasaraopet from TDP. He won the 2024 election with 103,167 votes.',
+      link: { label: 'Read More About MLA', url: '/leaders' }
+    },
+    contact: {
+      text: 'You can reach the office by phone or through the Contact page.',
+      link: { label: 'Call 9398724704', url: 'tel:9398724704' }
+    },
+    narasaraopet: {
+      text: 'Narasaraopet is in Palnadu district, Andhra Pradesh, and is closely associated with Kotappakonda temple and regional public-service activity.',
+      link: { label: 'Explore Narasaraopet', url: '/narasaraopet' }
+    },
+    kotappakonda: {
+      text: 'Kotappakonda is a sacred hill temple dedicated to Sri Trikoteswara Swamy near Narasaraopet.',
+      link: { label: 'View Kotappakonda Info', url: '/narasaraopet#kotappakonda' }
+    },
+    news: {
+      text: 'Latest news, public updates, and videos are available on the News page.',
+      link: { label: 'View Latest News', url: '/news' }
+    },
+    gallery: {
+      text: 'The Gallery page has photos and videos from events, visits, and constituency work.',
+      link: { label: 'Open Gallery', url: '/gallery' }
+    },
+    default: {
+      text: 'I can help with Super 6 schemes, MLA information, office contact details, Narasaraopet, Kotappakonda, news, and gallery updates.',
+      link: null
+    },
+    welcome: {
+      text: 'Namaste! Welcome. How can I help you today?',
+      link: null
+    }
+  },
+  te: {
+    super6: {
+      text: 'సూపర్ 6 పథకాలు ఆంధ్రప్రదేశ్ ప్రజల కోసం TDP ప్రోత్సహిస్తున్న ముఖ్య సంక్షేమ పథకాలు. పూర్తి వివరాలు మరియు వీడియోలు చూడండి.',
+      link: { label: 'సూపర్ 6 పథకాలు చూడండి', url: '/super6' }
+    },
+    schemes: {
+      text: 'ప్రభుత్వ మరియు సంక్షేమ పథకాల వివరాలు పథకాలు పేజీలో చూడవచ్చు.',
+      link: { label: 'అన్ని పథకాలు చూడండి', url: '/schemes' }
+    },
+    mla: {
+      text: 'డా. చదలవాడ అరవింద బాబు నరసరావుపేట TDP ఎమ్మెల్యే. 2024 ఎన్నికల్లో 103,167 ఓట్లతో గెలిచారు.',
+      link: { label: 'MLA గురించి చదవండి', url: '/leaders' }
+    },
+    contact: {
+      text: 'ఆఫీస్‌ను ఫోన్ ద్వారా లేదా Contact పేజీ ద్వారా సంప్రదించవచ్చు.',
+      link: { label: '9398724704 కు కాల్ చేయండి', url: 'tel:9398724704' }
+    },
+    narasaraopet: {
+      text: 'నరసరావుపేట ఆంధ్రప్రదేశ్‌లోని పల్నాడు జిల్లాలో ఉంది. కోటప్పకొండ ఆలయం మరియు స్థానిక అభివృద్ధి కార్యక్రమాలతో ప్రసిద్ధి చెందింది.',
+      link: { label: 'నరసరావుపేట చూడండి', url: '/narasaraopet' }
+    },
+    kotappakonda: {
+      text: 'కోటప్పకొండ నరసరావుపేట సమీపంలోని శ్రీ త్రికోటేశ్వర స్వామి పవిత్ర క్షేత్రం.',
+      link: { label: 'కోటప్పకొండ సమాచారం', url: '/narasaraopet#kotappakonda' }
+    },
+    news: {
+      text: 'తాజా వార్తలు, ప్రజా అప్డేట్లు, వీడియోలు News పేజీలో అందుబాటులో ఉన్నాయి.',
+      link: { label: 'తాజా వార్తలు చూడండి', url: '/news' }
+    },
+    gallery: {
+      text: 'ఈవెంట్లు, పర్యటనలు, నియోజకవర్గ పనుల ఫోటోలు మరియు వీడియోలు Gallery పేజీలో ఉన్నాయి.',
+      link: { label: 'గ్యాలరీ తెరవండి', url: '/gallery' }
+    },
+    default: {
+      text: 'సూపర్ 6 పథకాలు, MLA సమాచారం, ఆఫీస్ సంప్రదింపు, నరసరావుపేట, కోటప్పకొండ, వార్తలు, గ్యాలరీ గురించి నేను సహాయం చేయగలను.',
+      link: null
+    },
+    welcome: {
+      text: 'నమస్కారం! స్వాగతం. మీకు ఎలా సహాయం చేయగలను?',
+      link: null
+    }
   }
+};
+
+export const getWelcomeMessage = (language = 'en') => responses[language]?.welcome || responses.en.welcome;
+
+export const getBotResponse = (input, language = 'en') => {
+  const lower = String(input || '').toLowerCase();
+  const langResponses = responses[language] || responses.en;
+
+  if (lower.includes('kotappakonda') || lower.includes('temple') || lower.includes('కోటప్ప') || lower.includes('ఆలయ')) return langResponses.kotappakonda;
+  if (lower.includes('super6') || lower.includes('super 6') || lower.includes('సూపర్') || lower.includes('scheme') || lower.includes('పథక')) return langResponses.super6;
+  if (lower.includes('mla') || lower.includes('aravinda') || lower.includes('doctor') || lower.includes('ఎమ్మెల్యే') || lower.includes('అరవింద')) return langResponses.mla;
+  if (lower.includes('contact') || lower.includes('phone') || lower.includes('office') || lower.includes('సంప్రద') || lower.includes('ఫోన్') || lower.includes('ఆఫీస్')) return langResponses.contact;
+  if (lower.includes('narasaraopet') || lower.includes('constituency') || lower.includes('నరసరావుపేట') || lower.includes('నియోజక')) return langResponses.narasaraopet;
+  if (lower.includes('news') || lower.includes('video') || lower.includes('వార్త') || lower.includes('వీడియో')) return langResponses.news;
+  if (lower.includes('gallery') || lower.includes('photo') || lower.includes('ఫోటో') || lower.includes('గ్యాలరీ')) return langResponses.gallery;
+  if (lower.includes('schemes') || lower.includes('welfare') || lower.includes('benefits')) return langResponses.schemes;
+
+  return langResponses.default;
 };
 
 export class ChatbotEngine {
-  constructor(knowledge = [], language = 'te') {
+  constructor(knowledge = [], language = 'en') {
     this.knowledge = knowledge;
     this.language = language;
-    this.staticKB = STATIC_KNOWLEDGE[language] || STATIC_KNOWLEDGE.te;
   }
 
   findAnswer(userInput) {
-    const input = userInput.toLowerCase().trim();
-    for (const [keyPattern, answer] of Object.entries(this.staticKB)) {
-      if (keyPattern.split('|').some((key) => input.includes(key.toLowerCase()))) return answer;
-    }
+    const input = String(userInput || '').toLowerCase().trim();
     for (const item of this.knowledge || []) {
       if (item.active === false) continue;
-      const q = (this.language === 'te' ? item.question_te : item.question_en) || '';
-      if (this.isSimilar(input, q.toLowerCase())) return this.language === 'te' ? item.answer_te : item.answer_en;
+      const question = (this.language === 'te' ? item.question_te : item.question_en) || '';
+      if (this.isSimilar(input, question.toLowerCase())) {
+        return (this.language === 'te' ? item.answer_te : item.answer_en) || getBotResponse(userInput, this.language).text;
+      }
     }
-    return this.language === 'te'
-      ? 'క్షమించండి, మీ ప్రశ్నకు సమాధానం నాకు దొరకలేదు. దయచేసి Contact పేజీ ద్వారా మాకు సంప్రదించండి.'
-      : "Sorry, I couldn't find an answer to your question. Please contact us via the Contact page.";
+    return getBotResponse(userInput, this.language).text;
   }
 
   isSimilar(input, question) {

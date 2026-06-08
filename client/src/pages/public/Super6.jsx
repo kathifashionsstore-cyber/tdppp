@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ArrowUp, BookOpen, PlayCircle } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookOpen, Film, PlayCircle } from 'lucide-react';
 import PageHero from './PageHero';
 import { useCollection } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
@@ -16,8 +16,6 @@ const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   shortDescription_te: scheme.description,
   description_en: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
   description_te: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
-  thumbnail: scheme.image,
-  image: scheme.image,
   videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
   isPublished: true,
   isActive: true
@@ -55,7 +53,6 @@ const Super6Card = ({ scheme, index, language }) => {
   const [expanded, setExpanded] = useState(false);
   const title = getLangField(scheme, 'title', language);
   const fullDescription = getLangField(scheme, 'readMore', language) || getLangField(scheme, 'description', language);
-  const image = scheme.thumbnail || scheme.image || scheme.images?.[0] || '/og-image.svg';
   const videos = normalizeVideos(scheme.videos || scheme.videoUrls);
 
   return (
@@ -67,8 +64,10 @@ const Super6Card = ({ scheme, index, language }) => {
       className="group overflow-hidden rounded-lg border border-yellow-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.10)] transition hover:-translate-y-1 hover:border-yellow-300 hover:shadow-[0_18px_42px_rgba(245,166,35,0.22)]"
     >
       <div className="p-4">
-        <InlineVideoPlaylist videos={videos} poster={image} cardIndex={index} />
-        <h3 className="mt-5 line-clamp-3 text-2xl font-black leading-tight text-slate-950">{title}</h3>
+        <h3 className="line-clamp-3 text-2xl font-black leading-tight text-tdp-yellow drop-shadow-[0_1px_1px_rgba(15,23,42,0.65)]">{title || `Super 6 Scheme ${index + 1}`}</h3>
+        <div className="mt-4">
+          <InlineVideoPlaylist videos={videos} cardIndex={index} />
+        </div>
         <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-tdp-yellow px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-tdp-navy shadow-[0_8px_22px_rgba(245,166,35,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(245,166,35,0.55)]">
           <BookOpen size={16} /> {expanded ? 'Close' : 'Read More'} {expanded ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
         </button>
@@ -89,7 +88,7 @@ const Super6Card = ({ scheme, index, language }) => {
   );
 };
 
-const InlineVideoPlaylist = ({ videos, poster, cardIndex }) => {
+const InlineVideoPlaylist = ({ videos, cardIndex }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [inView, setInView] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -108,22 +107,33 @@ const InlineVideoPlaylist = ({ videos, poster, cardIndex }) => {
 
   useEffect(() => {
     setLoading(true);
-    const saved = progressMap[active?.url] || 0;
-    const video = videoRef.current;
-    if (video && saved > 0) {
-      const restore = () => {
-        if (saved < video.duration) video.currentTime = saved;
-      };
-      video.addEventListener('loadedmetadata', restore, { once: true });
-      return () => video.removeEventListener('loadedmetadata', restore);
-    }
     return undefined;
-  }, [active?.url, progressMap]);
+  }, [active?.url]);
 
   const switchVideo = (index) => {
     const current = videoRef.current;
-    if (current && active?.url) setProgressMap((state) => ({ ...state, [active.url]: current.currentTime || 0 }));
+    if (current) {
+      if (active?.url) setProgressMap((state) => ({ ...state, [active.url]: current.currentTime || 0 }));
+      current.pause();
+    }
+    setLoading(true);
     setActiveIndex(index);
+  };
+
+  const handleLoadedMetadata = () => {
+    const current = videoRef.current;
+    if (!current || !active?.url) return;
+    const saved = progressMap[active.url] || 0;
+    if (saved > 0 && Number.isFinite(current.duration) && saved < current.duration) {
+      current.currentTime = saved;
+    }
+    setLoading(false);
+  };
+
+  const handleTimeUpdate = () => {
+    const current = videoRef.current;
+    if (!current || !active?.url) return;
+    setProgressMap((state) => ({ ...state, [active.url]: current.currentTime || 0 }));
   };
 
   const fullscreen = () => {
@@ -134,8 +144,11 @@ const InlineVideoPlaylist = ({ videos, poster, cardIndex }) => {
   if (!videos.length) {
     return (
       <div className="rounded-lg border border-yellow-300 bg-slate-950 p-3 shadow-xl">
-        <div className="video-player-wrapper grid place-items-center">
-          <img src={poster} alt="" className="h-full w-full object-cover opacity-70" />
+        <div className="video-player-wrapper grid place-items-center text-center text-yellow-100">
+          <div className="grid gap-2 px-4">
+            <Film className="mx-auto text-tdp-yellow" size={34} />
+            <p className="text-sm font-black uppercase tracking-[0.12em]">Video will appear here</p>
+          </div>
         </div>
         <p className="mt-3 text-sm font-semibold text-slate-300">No videos added yet.</p>
       </div>
@@ -154,24 +167,24 @@ const InlineVideoPlaylist = ({ videos, poster, cardIndex }) => {
           <video
             ref={videoRef}
             key={active.url}
+            src={active.url}
             controls
             muted={cardIndex === 0}
             autoPlay={cardIndex === 0}
             preload="metadata"
-            poster={poster}
+            playsInline
+            onLoadedMetadata={handleLoadedMetadata}
             onCanPlay={() => setLoading(false)}
             onWaiting={() => setLoading(true)}
-            onTimeUpdate={(event) => setProgressMap((state) => ({ ...state, [active.url]: event.currentTarget.currentTime || 0 }))}
-          >
-            <source src={active.url} />
-          </video>
+            onTimeUpdate={handleTimeUpdate}
+          />
         )}
       </div>
       <div className="mt-3 flex gap-3 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch]">
         {videos.map((video, index) => (
           <button key={`${video.url}-${index}`} type="button" onClick={() => switchVideo(index)} className={`min-w-[132px] rounded-lg border p-2 text-left transition ${index === activeIndex ? 'border-tdp-yellow bg-tdp-yellow text-slate-950' : 'border-white/15 bg-white/8 text-white hover:bg-white/14'}`}>
-            <span className="block aspect-video overflow-hidden rounded bg-black/40">
-              <img src={poster} alt="" className="h-full w-full object-cover opacity-80" loading="lazy" />
+            <span className="grid aspect-video place-items-center rounded bg-black/40">
+              <PlayCircle size={28} className={index === activeIndex ? 'text-slate-950' : 'text-tdp-yellow'} />
             </span>
             <span className="mt-2 line-clamp-2 block text-xs font-black">{video.title}</span>
           </button>

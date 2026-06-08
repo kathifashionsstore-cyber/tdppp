@@ -2,26 +2,19 @@ import { Languages } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const LanguageToggle = () => {
-  const { language, setLanguage } = useLanguage();
-  const options = [
-    { key: 'te', label: 'తెలుగు' },
-    { key: 'en', label: 'English' }
-  ];
+  const { language, toggleLanguage } = useLanguage();
+  const nextLabel = language === 'en' ? '\u0c24\u0c46\u0c32\u0c41\u0c17\u0c41' : 'English';
+
   return (
-    <div className="inline-flex items-center gap-1 border border-red-100 bg-white p-1 shadow-sm">
-      <Languages size={15} className="ml-1 text-tdp-red" />
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          onClick={() => setLanguage(option.key)}
-          className={`px-2.5 py-1 text-xs font-black transition ${language === option.key ? 'bg-tdp-red text-white shadow-red' : 'text-gray-600 hover:bg-yellow-50 hover:text-tdp-red'}`}
-          aria-pressed={language === option.key}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <button
+      type="button"
+      onClick={toggleLanguage}
+      className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-100 bg-white px-3 py-2 text-xs font-black text-tdp-red shadow-sm transition hover:bg-yellow-50"
+      aria-label={`Switch language to ${nextLabel}`}
+    >
+      <Languages size={15} />
+      <span>{nextLabel}</span>
+    </button>
   );
 };
 

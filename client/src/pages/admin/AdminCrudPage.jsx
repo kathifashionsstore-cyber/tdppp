@@ -41,6 +41,7 @@ const emptyByType = (type) => ({
   applyLink: '',
   mapEmbedUrl: '',
   videoUrl: '',
+  youtubeUrl: '',
   tag: '',
   startDate: new Date(),
   endDate: type === 'festivalBanners' ? tomorrow() : new Date()
@@ -58,9 +59,10 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
   const label = type === 'towns' ? 'Name' : 'Title';
 
   const normalizePayload = async () => {
-    const youtubeThumbnail = collectionName === 'news' ? getYouTubeThumbnailUrl(form.videoUrl || form.url) : '';
+    const rawVideoUrl = form.videoUrl || form.youtubeUrl || form.url || '';
+    const youtubeThumbnail = collectionName === 'news' ? getYouTubeThumbnailUrl(rawVideoUrl) : '';
     const imageValue = form.image || form.thumbnail || form.images?.[0] || youtubeThumbnail || '';
-    const videoEmbedUrl = collectionName === 'news' ? getYouTubeEmbedUrl(form.videoUrl || form.url) : '';
+    const videoEmbedUrl = collectionName === 'news' ? getYouTubeEmbedUrl(rawVideoUrl) : '';
     const fallbackTitle = collectionName === 'narasaraopetSections' && imageValue ? `Narasaraopet Photo Frame ${new Date().toLocaleDateString('en-IN')}` : '';
     const titleValue = form.title_en || form.name_en || fallbackTitle;
     const descriptionValue = form.description_en || form.content_en || form.message_en || '';
@@ -76,6 +78,8 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
       image: imageValue,
       thumbnail: collectionName === 'news' ? imageValue : form.thumbnail || imageValue,
       youtubeThumbnail,
+      youtubeUrl: collectionName === 'news' ? rawVideoUrl : form.youtubeUrl,
+      videoUrl: collectionName === 'news' ? rawVideoUrl : form.videoUrl,
       videoEmbedUrl,
       applyLink: collectionName === 'schemes' ? form.applyLink || form.linkUrl || '' : form.applyLink,
       images: form.images?.length ? form.images : imageValue ? [imageValue] : []
@@ -84,15 +88,25 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
   };
 
   const edit = (item) => {
-    setEditing(item.id);
+    const editId = item.id || item._id;
+    const richText = item.content_en || item.description_en || item.message_en || item.description || item.content || item.message || '';
+    setEditing(editId);
     setForm({
       ...emptyByType(type),
       ...item,
+      title_en: item.title_en || item.title || item.name_en || item.name || '',
+      name_en: item.name_en || item.name || item.title_en || item.title || '',
+      description_en: item.description_en || item.description || richText,
+      content_en: item.content_en || item.content || richText,
+      message_en: item.message_en || item.message || richText,
+      videoUrl: item.videoUrl || item.youtubeUrl || item.url || '',
+      youtubeUrl: item.youtubeUrl || item.videoUrl || item.url || '',
       date: item.date?.toDate?.() || item.date || new Date(),
       publishedAt: item.publishedAt?.toDate?.() || item.publishedAt || new Date(),
       startDate: item.startDate?.toDate?.() || item.startDate || new Date(),
       endDate: item.endDate?.toDate?.() || item.endDate || new Date()
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const reset = () => {
@@ -150,7 +164,7 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
             <DatePicker className="min-h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" selected={form.date || form.publishedAt || new Date()} onChange={(date) => update(collectionName === 'news' ? 'publishedAt' : 'date', date)} />
             <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Location" value={form.location_en || ''} onChange={(e) => update('location_en', e.target.value)} />
             {collectionName === 'gallery' && form.type === 'video' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Paste YouTube video link" value={form.url || ''} onChange={(e) => update('url', e.target.value)} />}
-            {collectionName === 'news' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="YouTube video link, e.g. https://www.youtube.com/watch?v=xxxxx" value={form.videoUrl || ''} onChange={(e) => update('videoUrl', e.target.value)} />}
+            {collectionName === 'news' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="YouTube video link, e.g. https://www.youtube.com/watch?v=xxxxx" value={form.videoUrl || form.youtubeUrl || ''} onChange={(e) => setForm((state) => ({ ...state, videoUrl: e.target.value, youtubeUrl: e.target.value }))} />}
             {collectionName === 'news' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Tag, e.g. Meeting, Development, Press Meet" value={form.tag || ''} onChange={(e) => update('tag', e.target.value)} />}
             {collectionName === 'announcements' && <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Optional link URL, e.g. tel:9398724704" value={form.linkUrl || ''} onChange={(e) => update('linkUrl', e.target.value)} />}
             {collectionName === 'schemes' && <input type="url" className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Apply link, e.g. https://official-portal.gov.in/apply" value={form.applyLink || form.linkUrl || ''} onChange={(e) => update('applyLink', e.target.value)} />}
