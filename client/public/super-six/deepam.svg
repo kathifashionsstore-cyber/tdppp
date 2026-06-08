@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900">
+  <rect width="900" height="900" fill="#151515"/>
+  <ellipse cx="450" cy="720" rx="260" ry="70" fill="#ffd700" opacity=".35"/>
+  <rect x="320" y="330" width="260" height="360" rx="80" fill="#f4f4f5"/>
+  <rect x="370" y="270" width="160" height="105" rx="36" fill="#cc0000"/>
+  <path d="M450 115c85 105 112 177 83 247-24 59-78 88-83 88s-59-29-83-88c-29-70-2-142 83-247Z" fill="#ffd700"/>
+  <path d="M450 230c39 55 48 90 28 122-13 21-28 31-28 31s-15-10-28-31c-20-32-11-67 28-122Z" fill="#ff6b00"/>
+  <text x="450" y="795" text-anchor="middle" font-family="Arial, sans-serif" font-size="56" font-weight="800" fill="#fff">Deepam Pathakam</text>
+</svg>

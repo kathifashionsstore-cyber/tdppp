@@ -1,0 +1,50 @@
+{
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "leaders": "Leaders",
+    "dailyWork": "Daily Work",
+    "super6": "Super 6",
+    "achievements": "Achievements",
+    "schemes": "Schemes",
+    "gallery": "Gallery",
+    "news": "News",
+    "constituency": "Narasaraopet",
+    "villages": "Villages",
+    "towns": "Villages",
+    "contact": "Contact"
+  },
+  "home": {
+    "heroTitle": "MLA Dedicated to Narasaraopet Development",
+    "statsTitle": "Service Records",
+    "latestWork": "Latest Work",
+    "viewAll": "View All",
+    "ticker": "Breaking News"
+  },
+  "common": {
+    "readMore": "Read More",
+    "viewAll": "View All",
+    "close": "Close",
+    "submit": "Submit",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Retry",
+    "search": "Search",
+    "filter": "Filter",
+    "empty": "No content yet",
+    "all": "All"
+  },
+  "chatbot": {
+    "online": "Online assistant",
+    "placeholder": "Ask your question...",
+    "welcome": "Namaste! Welcome to Narasaraopet TDP website. How can I help you?"
+  },
+  "admin": {
+    "dashboard": "Dashboard",
+    "save": "Save",
+    "publish": "Publish",
+    "draft": "Draft",
+    "login": "Admin Login",
+    "logout": "Logout"
+  }
+}

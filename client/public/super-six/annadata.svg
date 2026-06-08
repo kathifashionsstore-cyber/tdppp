@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900">
+  <rect width="900" height="900" fill="#f0fff4"/>
+  <circle cx="690" cy="170" r="115" fill="#ffd700"/>
+  <path d="M130 700c95-150 210-225 345-225s250 75 345 225" fill="#228b22" opacity=".85"/>
+  <path d="M450 630V260" stroke="#6b3f18" stroke-width="34" stroke-linecap="round"/>
+  <path d="M450 365c-130-20-190-95-210-220 130 10 208 83 210 220Zm0 95c140-18 220-98 250-240-146 12-236 92-250 240Z" fill="#22c55e"/>
+  <text x="450" y="805" text-anchor="middle" font-family="Arial, sans-serif" font-size="56" font-weight="800" fill="#111827">Farmer Support</text>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900">
+  <rect width="900" height="900" fill="#eef6ff"/>
+  <rect x="180" y="210" width="540" height="420" rx="42" fill="#fff" stroke="#cc0000" stroke-width="20"/>
+  <path d="M260 320h380M260 410h310M260 500h250" stroke="#111827" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="650" cy="640" r="105" fill="#ffd700"/>
+  <path d="M610 640l32 34 68-78" fill="none" stroke="#cc0000" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="450" y="775" text-anchor="middle" font-family="Arial, sans-serif" font-size="56" font-weight="800" fill="#111827">Education Support</text>
+</svg>

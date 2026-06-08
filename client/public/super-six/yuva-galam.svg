@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900">
+  <rect width="900" height="900" fill="#111827"/>
+  <path d="M160 620c80-170 180-255 300-255s220 85 300 255" fill="none" stroke="#ffd700" stroke-width="50" stroke-linecap="round"/>
+  <circle cx="450" cy="255" r="115" fill="#cc0000"/>
+  <path d="M325 650h250M370 730h160" stroke="#fff" stroke-width="34" stroke-linecap="round"/>
+  <text x="450" y="820" text-anchor="middle" font-family="Arial, sans-serif" font-size="56" font-weight="800" fill="#fff">Youth Allowance</text>
+</svg>
