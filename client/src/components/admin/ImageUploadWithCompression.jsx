@@ -134,7 +134,13 @@ const ImageUploadWithCompression = ({
           progress: 40
         } : item));
 
-        onUpload?.({ ...compressed, previewUrl });
+        onUpload?.({
+          ...compressed,
+          compressedFile: compressed.file,
+          isLocalPreview: true,
+          previewUrl,
+          url: previewUrl
+        });
         const uploaded = await uploadCompressedImage(compressed.file, {
           folder: storageFolder,
           signal: controller.signal,
@@ -147,6 +153,7 @@ const ImageUploadWithCompression = ({
         });
         if (controller.signal.aborted) throw new Error('Upload canceled');
         const uploadedUrl = uploaded.url || uploaded.downloadURL || uploaded.displayUrl || '';
+        if (!uploadedUrl) throw new Error('Upload finished without an image URL. Please try again.');
 
         uploadedUrls.push(uploadedUrl);
         processed.push({ ...compressed, ...uploaded, previewUrl, url: uploadedUrl });

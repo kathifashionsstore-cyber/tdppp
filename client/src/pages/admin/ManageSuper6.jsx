@@ -76,6 +76,7 @@ const thumbnailDraft = (scheme, item) => ({
   thumbnailUrl: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
   thumbnailPath: item?.thumbnailPath || item?.playlistThumbnailPath || item?.videoThumbnailPath || '',
   previewUrl: '',
+  pendingLocalPreview: false,
   thumbnailLabel_en: item?.thumbnailLabel_en || `${item?.title_en || scheme.nameEn} Video`
 });
 
@@ -119,28 +120,36 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
     ...state,
     playlistThumbnail: url,
     thumbnailUrl: url,
+    pendingLocalPreview: false,
     ...(!url ? { thumbnailPath: '', previewUrl: '' } : {})
   }));
   const updateLocalPreview = (uploaded) => {
     if (!uploaded?.previewUrl) return;
     setDraft((state) => ({
       ...state,
-      previewUrl: uploaded.previewUrl
+      previewUrl: uploaded.previewUrl,
+      pendingLocalPreview: true
     }));
   };
   const updateUploadedThumbnail = (uploaded) => {
     if (!uploaded) return;
+    const uploadedUrl = uploaded.url || uploaded.downloadURL || uploaded.displayUrl || '';
+    if (!uploadedUrl) {
+      setSaveError('Upload finished without a usable image URL. Please try again.');
+      return;
+    }
     setDraft((state) => ({
       ...state,
-      playlistThumbnail: uploaded.url || uploaded.downloadURL || state.playlistThumbnail,
-      thumbnailUrl: uploaded.url || uploaded.downloadURL || state.thumbnailUrl,
+      playlistThumbnail: uploadedUrl,
+      thumbnailUrl: uploadedUrl,
       thumbnailPath: uploaded.path || uploaded.fullPath || state.thumbnailPath || '',
-      previewUrl: ''
+      pendingLocalPreview: false
     }));
   };
 
   const save = async () => {
     if (imageUploading) return toast.error('Please wait until thumbnail upload finishes');
+    if (draft.pendingLocalPreview) return toast.error('Please wait until the new thumbnail finishes uploading');
     const thumbnailUrl = draft.thumbnailUrl || draft.playlistThumbnail;
     if (!thumbnailUrl) return toast.error(`Upload a thumbnail for ${scheme.nameEn}`);
     setSaving(true);
@@ -195,8 +204,8 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
         </div>
       </div>
       <div className="grid gap-2">
-        <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
-          <Save size={18} />{saving ? 'Saving...' : 'Save'}
+        <button type="button" onClick={save} disabled={imageUploading || saving || draft.pendingLocalPreview || !(draft.thumbnailUrl || draft.playlistThumbnail)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
+          <Save size={18} />{imageUploading || draft.pendingLocalPreview ? 'Uploading...' : saving ? 'Saving...' : 'Save'}
         </button>
         {saveError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{saveError}</p>}
       </div>
