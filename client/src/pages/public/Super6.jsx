@@ -7,6 +7,7 @@ import { super6Schemes } from '@/data/super6Data';
 import { getLangField, sanitizeHtml } from '@/utils/helpers';
 import { useLanguage } from '@/hooks/useLanguage';
 import useResolvedImage from '@/hooks/useResolvedImage';
+import SchemeGraphDashboard from '@/components/ui/SchemeGraphDashboard';
 
 const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   id: scheme.id,
@@ -24,6 +25,7 @@ const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   thumbnailPath: '',
   thumbnailLabel_en: `${scheme.nameEn} Video`,
   thumbnailLabel_te: `${scheme.nameTe} Video`,
+  progressPercent: 70 + (index * 4),
   isPublished: true,
   isActive: true
 }));
@@ -50,6 +52,8 @@ const Super6 = () => {
   return (
     <>
       <PageHero page="super6" title="Super 6 Schemes" subtitle="Flagship welfare schemes of Telugu Desam Party" />
+      <Super6ProgressBars schemes={schemes} language={language} />
+      <SchemeGraphDashboard />
       <section className="bg-white py-12 md:py-16">
         <div className="mx-auto w-full max-w-[1560px] px-4 sm:px-6 lg:px-8">
           <div className="mb-7 max-w-3xl">
@@ -66,6 +70,35 @@ const Super6 = () => {
     </>
   );
 };
+
+const Super6ProgressBars = ({ schemes, language }) => (
+  <section className="bg-[#10162f] py-10 text-white">
+    <div className="container-page">
+      <div className="mb-6">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-tdp-yellow">Admin Controlled Progress</p>
+        <h2 className="telugu mt-2 text-3xl font-black">సూపర్ 6 పురోగతి</h2>
+        <p className="mt-1 text-sm font-semibold text-white/62">Progress percentages are managed from the Super 6 admin panel.</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {schemes.slice(0, 6).map((scheme, index) => {
+          const title = getLangField(scheme, 'title', language) || `Super 6 Scheme ${index + 1}`;
+          const progress = Math.max(0, Math.min(100, Number(scheme.progressPercent ?? scheme.progress ?? 75)));
+          return (
+            <article key={scheme.id || index} className="rounded-lg border border-white/10 bg-white/[0.07] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="telugu line-clamp-2 text-lg font-black text-white">{title}</h3>
+                <span className="rounded-full bg-tdp-yellow px-3 py-1 text-xs font-black text-tdp-navy">{progress}%</span>
+              </div>
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/12">
+                <div className="h-full origin-left rounded-full bg-gradient-to-r from-tdp-yellow to-orange-400 transition-transform duration-700" style={{ transform: `scaleX(${progress / 100})` }} />
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  </section>
+);
 
 const Super6Card = ({ scheme, index, language }) => {
   const [expanded, setExpanded] = useState(false);
@@ -129,7 +162,13 @@ const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailPath, thum
 
   useEffect(() => {
     setLoading(true);
-    return undefined;
+    return () => {
+      const current = videoRef.current;
+      if (!current) return;
+      current.pause();
+      current.removeAttribute('src');
+      current.load();
+    };
   }, [active?.url]);
 
   useEffect(() => {
@@ -201,8 +240,7 @@ const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailPath, thum
             src={active.url}
             controls
             muted={cardIndex === 0}
-            autoPlay={cardIndex === 0}
-            preload="metadata"
+            preload="none"
             playsInline
             onLoadedMetadata={handleLoadedMetadata}
             onCanPlay={() => setLoading(false)}

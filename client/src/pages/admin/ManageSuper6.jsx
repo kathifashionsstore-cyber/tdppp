@@ -32,6 +32,7 @@ const emptyForm = () => ({
   image: '',
   images: [],
   videos: [],
+  progressPercent: 75,
   order: 1,
   isPublished: true,
   isActive: true
@@ -66,6 +67,7 @@ const defaultSchemePayload = (scheme, index) => ({
   thumbnailPath: '',
   thumbnailLabel_en: `${scheme.nameEn} Video`,
   thumbnailLabel_te: `${scheme.nameTe} Video`,
+  progressPercent: 70 + (index * 4),
   order: index + 1,
   isPublished: true,
   isActive: true
@@ -170,11 +172,11 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
       }, ['thumbnailLabel']), `Saving ${scheme.nameEn} thumbnail timed out. Please try again.`);
       if (item?.id) await withSaveTimeout(crud.update.mutateAsync({ id: item.id, data: payload }), `Saving ${scheme.nameEn} thumbnail timed out. Please try again.`);
       else await withSaveTimeout(crud.create.mutateAsync(payload), `Saving ${scheme.nameEn} thumbnail timed out. Please try again.`);
-      toast.success(`${scheme.nameEn} thumbnail saved`);
+      toast.success('Saved successfully');
     } catch (error) {
       const message = error.message || 'Unable to save thumbnail';
       setSaveError(message);
-      toast.error(message);
+      toast.error(`Failed - ${message}`);
     } finally {
       setSaving(false);
     }
@@ -282,13 +284,14 @@ const ManageSuper6 = () => {
         thumbnailPath: '',
         thumbnailLabel_en: `${scheme.nameEn} Video`,
         thumbnailLabel_te: `${scheme.nameTe} Video`,
+        progressPercent: 70 + (index * 4),
         order: index + 1,
         isPublished: true,
         isActive: true
       })));
       toast.success('Default Super 6 entries added');
     } catch (error) {
-      toast.error(error.message || 'Unable to seed Super 6 entries');
+      toast.error(`Failed - ${error.message || 'Unable to seed Super 6 entries'}`);
     }
   };
 
@@ -304,17 +307,18 @@ const ManageSuper6 = () => {
         ...form,
         image,
         thumbnail: form.thumbnail || image,
+        progressPercent: Math.max(0, Math.min(100, Number(form.progressPercent) || 0)),
         images: form.images?.length ? form.images : image ? [image] : [],
         videos: normalizeVideos(form.videos).filter((video) => video.url && !String(video.url).startsWith('blob:')).map(({ title, url }) => ({ title, url }))
       }), 'Saving Super 6 scheme timed out. Please try again.');
       if (editing) await withSaveTimeout(crud.update.mutateAsync({ id: editing, data: payload }), 'Saving Super 6 scheme timed out. Please try again.');
       else await withSaveTimeout(crud.create.mutateAsync(payload), 'Saving Super 6 scheme timed out. Please try again.');
-      toast.success('Super 6 scheme saved');
+      toast.success('Saved successfully');
       reset();
     } catch (error) {
       const message = error.message || 'Save failed';
       setSaveError(message);
-      toast.error(message);
+      toast.error(`Failed - ${message}`);
     } finally {
       setSaving(false);
     }
@@ -351,6 +355,10 @@ const ManageSuper6 = () => {
             <label>
               <span className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Display Order</span>
               <input type="number" min="1" max="6" className="min-h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" value={form.order} onChange={(event) => update('order', Number(event.target.value))} />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Progress Percentage</span>
+              <input type="number" min="0" max="100" className="min-h-12 w-full rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" value={form.progressPercent ?? 0} onChange={(event) => update('progressPercent', Number(event.target.value))} />
             </label>
             <label className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={!!form.isPublished} onChange={(event) => update('isPublished', event.target.checked)} /> Published</label>
             <label className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={!!form.isActive} onChange={(event) => update('isActive', event.target.checked)} /> Active</label>
@@ -403,7 +411,7 @@ const ManageSuper6 = () => {
         {saveError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{saveError}</p>}
       </form>
 
-      {isLoading ? <div className="rounded-2xl bg-white p-6 shadow-sm">Loading...</div> : <ContentTable items={data} onEdit={edit} onDelete={(id) => crud.remove.mutate(id)} language="en" />}
+      {isLoading ? <div className="rounded-2xl bg-white p-6 shadow-sm">Loading...</div> : <ContentTable items={data} onEdit={edit} onDelete={(id) => crud.remove.mutateAsync(id)} language="en" />}
     </div>
   );
 };

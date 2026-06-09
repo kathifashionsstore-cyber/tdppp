@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Star } from 'lucide-react';
 import { super6Schemes } from '@/data/super6Data';
@@ -34,6 +34,15 @@ const VideoCard = ({ scheme, index, onDetails }) => {
   const videoRef = useRef(null);
   const [playing, setPlaying] = useState(false);
 
+  useEffect(() => () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    video.querySelectorAll('source').forEach((source) => source.removeAttribute('src'));
+    video.removeAttribute('src');
+    video.load();
+  }, []);
+
   const playInline = (event) => {
     event.stopPropagation();
     const video = videoRef.current;
@@ -50,7 +59,7 @@ const VideoCard = ({ scheme, index, onDetails }) => {
       onClick={onDetails}
       className="group relative h-[310px] w-[220px] shrink-0 cursor-pointer overflow-hidden rounded-2xl bg-slate-950 shadow-2xl md:h-[330px] md:w-auto"
     >
-      <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline preload="metadata" poster={scheme.poster} controls={playing}>
+      <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline preload="none" poster={scheme.poster} controls={playing}>
         <source src={scheme.videoSrc} type="video/mp4" />
       </video>
       {!playing && <img src={scheme.poster} alt="" className="absolute inset-0 h-full w-full bg-white/5 object-contain p-8" loading="lazy" />}

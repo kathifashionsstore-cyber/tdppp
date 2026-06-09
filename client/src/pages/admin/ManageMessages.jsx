@@ -2,6 +2,7 @@ import { CheckCircle2, Phone, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCollection, useCrud } from '@/hooks/useFirestore';
 import { formatDate } from '@/utils/dateUtils';
+import { confirmToast, toastError } from '@/utils/toastUtils.jsx';
 
 const ManageMessages = () => {
   const { data = [], isLoading } = useCollection('contactRequests', { orderByField: 'createdAt', orderDirection: 'desc' });
@@ -9,13 +10,27 @@ const ManageMessages = () => {
   const unread = data.filter((item) => item.status === 'new' || item.isRead === false).length;
 
   const markRead = async (item) => {
-    await crud.update.mutateAsync({ id: item.id, data: { status: 'read', isRead: true } });
-    toast.success('Message marked as read');
+    try {
+      await crud.update.mutateAsync({ id: item.id, data: { status: 'read', isRead: true } });
+      toast.success('Message marked as read');
+    } catch (error) {
+      toastError(error, 'Unable to update message');
+    }
   };
 
   const remove = async (id) => {
-    await crud.remove.mutateAsync(id);
-    toast.success('Message deleted');
+    const confirmed = await confirmToast({
+      title: 'Delete message?',
+      message: 'Delete this contact message? This cannot be undone.',
+      confirmLabel: 'Delete'
+    });
+    if (!confirmed) return;
+    try {
+      await crud.remove.mutateAsync(id);
+      toast.success('Message deleted');
+    } catch (error) {
+      toastError(error, 'Unable to delete message');
+    }
   };
 
   return (

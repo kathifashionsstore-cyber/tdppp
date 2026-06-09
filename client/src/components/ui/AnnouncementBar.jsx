@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useMemo } from 'react';
 import { Phone } from 'lucide-react';
 import { useCollection } from '@/hooks/useFirestore';
 import { getLangField, stripHtml } from '@/utils/helpers';
 import { useLanguage } from '@/hooks/useLanguage';
+import BicycleIcon from '@/components/ui/BicycleIcon';
 
 const defaultAnnouncements = [
   {
@@ -31,49 +31,44 @@ const AnnouncementBar = () => {
   const { language } = useLanguage();
   const { data = [] } = useCollection('announcements', { activeOnly: true, orderByField: 'order', orderDirection: 'asc' });
   const announcements = useMemo(() => {
-    const adminItems = data.filter((item) => getLangField(item, 'title', language) || getLangField(item, 'message', language) || getLangField(item, 'description', language));
-    return adminItems.length ? adminItems : defaultAnnouncements;
+    const adminItems = data
+      .map((item) => ({
+        ...item,
+        text: stripHtml(getLangField(item, 'title', language) || getLangField(item, 'message', language) || getLangField(item, 'description', language))
+      }))
+      .filter((item) => item.text);
+    const source = adminItems.length ? adminItems : defaultAnnouncements.map((item) => ({
+      ...item,
+      text: stripHtml(getLangField(item, 'title', language))
+    }));
+    return source.map((item) => ({ ...item, linkUrl: item.linkUrl || item.url || '' }));
   }, [data, language]);
-  const [index, setIndex] = useState(0);
-
-  useEffect(() => {
-    if (announcements.length < 2) return undefined;
-    const timer = window.setInterval(() => setIndex((value) => (value + 1) % announcements.length), 3000);
-    return () => window.clearInterval(timer);
-  }, [announcements.length]);
-
-  useEffect(() => {
-    setIndex(0);
-  }, [announcements.length]);
-
-  const active = announcements[index] || announcements[0];
-  const text = stripHtml(getLangField(active, 'title', language) || getLangField(active, 'message', language) || getLangField(active, 'description', language));
-  const content = (
-    <span className="announcement-slide inline-flex min-w-0 items-center gap-2 text-sm font-black text-slate-950">
-      {active?.linkUrl?.startsWith('tel:') && <Phone size={15} />}
-      <span className="truncate">{text}</span>
-    </span>
-  );
+  const mobileCallLink = announcements.find((item) => item.linkUrl?.startsWith('tel:'))?.linkUrl || 'tel:9398724704';
+  const marqueeItems = [...announcements, ...announcements];
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[90] h-9 overflow-hidden bg-gradient-to-r from-tdp-yellow via-[#ffe766] to-tdp-gold text-slate-950 shadow-md">
-      <div className="container-page flex h-full items-center justify-center">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={active?.id || index}
-            initial={{ y: 22, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -22, opacity: 0 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="max-w-full"
-          >
-            {active?.linkUrl ? (
-              <a href={active.linkUrl} className="block max-w-full" aria-label={text}>
-                {content}
-              </a>
-            ) : content}
-          </motion.div>
-        </AnimatePresence>
+    <div className="announcement-bar fixed inset-x-0 top-0 z-[90] h-8 overflow-hidden text-[#1a1a1a] shadow-md md:h-10">
+      <a href={mobileCallLink} className="absolute inset-0 z-20 md:hidden" aria-label="Call WayzenTech" />
+      <div className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/42 p-1">
+        <BicycleIcon size={24} color="#1a1a1a" opacity={1} className="announcement-icon-rotate" />
+      </div>
+      <div className="pointer-events-none absolute right-2 top-1/2 z-10 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-white/45 text-[#1a1a1a] md:h-7 md:w-7">
+        <Phone size={15} className="announcement-phone-pulse" />
+      </div>
+      <div className="relative z-0 flex h-full items-center overflow-hidden px-11">
+        <div className="announcement-track text-[12px] font-black md:text-sm">
+          {marqueeItems.map((item, index) => (
+            <span key={`${item.id || item.text}-${index}`} className="inline-flex items-center gap-4 px-2">
+              {item.linkUrl ? (
+                <a href={item.linkUrl} className="hidden underline-offset-2 hover:underline md:inline" aria-label={item.text}>{item.text}</a>
+              ) : (
+                <span>{item.text}</span>
+              )}
+              {item.linkUrl && <span className="md:hidden">{item.text}</span>}
+              <span aria-hidden="true" className="text-base leading-none">✦</span>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

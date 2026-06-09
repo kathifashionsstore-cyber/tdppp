@@ -4,9 +4,21 @@ import { useEffect, useState } from 'react';
 const BackToTop = () => {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > 600);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    const sentinel = document.createElement('span');
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.position = 'absolute';
+    sentinel.style.top = '600px';
+    sentinel.style.left = '0';
+    sentinel.style.width = '1px';
+    sentinel.style.height = '1px';
+    sentinel.style.pointerEvents = 'none';
+    document.body.appendChild(sentinel);
+    const observer = new IntersectionObserver(([entry]) => setVisible(!entry.isIntersecting), { threshold: 0 });
+    observer.observe(sentinel);
+    return () => {
+      observer.disconnect();
+      sentinel.remove();
+    };
   }, []);
   if (!visible) return null;
   return (

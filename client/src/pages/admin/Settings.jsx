@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDoc, useCrud } from '@/hooks/useFirestore';
+import { toastError } from '@/utils/toastUtils.jsx';
 
 const fields = [
   ['siteName_en', 'Site name'],
@@ -30,8 +31,12 @@ const Settings = () => {
       constituency_te: merged.constituency_te || merged.constituency_en,
       address_te: merged.address_te || merged.address_en
     };
-    await crud.set.mutateAsync({ id: 'general', data: payload });
-    toast.success('Settings saved');
+    try {
+      await crud.set.mutateAsync({ id: 'general', data: payload });
+      toast.success('Saved successfully');
+    } catch (error) {
+      toastError(error, 'Settings save failed');
+    }
   };
   return (
     <div className="grid gap-6">

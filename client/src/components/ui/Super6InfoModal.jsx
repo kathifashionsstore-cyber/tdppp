@@ -1,7 +1,24 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useRef } from 'react';
 import { X, CheckCircle2, Share2 } from 'lucide-react';
 
 const Super6InfoModal = ({ scheme, open, onClose }) => {
+  const videoRef = useRef(null);
+
+  const cleanupVideo = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    video.removeAttribute('src');
+    video.querySelectorAll('source').forEach((source) => source.removeAttribute('src'));
+    video.load();
+  };
+
+  useEffect(() => {
+    if (!open) cleanupVideo();
+    return cleanupVideo;
+  }, [open]);
+
   if (!scheme) return null;
 
   return (
@@ -77,7 +94,7 @@ const Super6InfoModal = ({ scheme, open, onClose }) => {
                 <aside className="space-y-4">
                   <div className="overflow-hidden rounded-2xl bg-slate-950 shadow-xl">
                     <div className="aspect-video bg-slate-900">
-                      <video className="h-full w-full object-cover" controls playsInline preload="metadata" poster={scheme.poster}>
+                      <video ref={videoRef} className="h-full w-full object-cover" controls playsInline preload="none" poster={scheme.poster}>
                         <source src={scheme.videoSrc} type="video/mp4" />
                       </video>
                     </div>

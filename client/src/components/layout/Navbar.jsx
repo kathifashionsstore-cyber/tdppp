@@ -19,7 +19,7 @@ const Navbar = () => {
           <div className="flex gap-3"><Facebook size={15} /><Youtube size={15} /><Instagram size={15} /><Send size={15} /></div>
         </div>
       </div>
-      <header className="sticky top-9 z-50 border-b border-white/10 bg-gradient-to-r from-[#111827] via-tdp-red to-[#f5a623] shadow-lg backdrop-blur">
+      <header className="sticky top-8 z-50 border-b border-white/10 bg-gradient-to-r from-[#111827] via-tdp-red to-[#f5a623] shadow-lg backdrop-blur md:top-10">
         <div className="container-page flex h-[72px] items-center justify-between">
           <NavLink to="/" className="flex items-center gap-3 font-black text-white">
             <span className="relative grid h-12 w-12 place-items-center rounded-full bg-white shadow-yellow ring-4 ring-yellow-300/30">

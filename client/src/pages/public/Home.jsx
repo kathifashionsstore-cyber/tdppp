@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import PageHero from './PageHero';
 import WorkCard from '@/components/ui/WorkCard';
 import NewsCard from '@/components/ui/NewsCard';
-import SchemeGraphDashboard from '@/components/ui/SchemeGraphDashboard';
+import WelfareBenefitsGraph from '@/components/ui/WelfareBenefitsGraph';
 import LeaderHighlightSection from '@/components/ui/LeaderHighlightSection';
 import HomeAboutSection from '@/components/ui/HomeAboutSection';
 import VisitorCounter from '@/components/ui/VisitorCounter';
@@ -48,7 +48,7 @@ const Home = () => {
 
       <HomeAboutSection />
       <VisitorCounter />
-      <SchemeGraphDashboard />
+      <WelfareBenefitsGraph />
 
       <section id="news" className="container-page scroll-mt-24 py-12">
         <SectionHeading title={text.latestNews} to="/news" cta={text.viewAll} />

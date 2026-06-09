@@ -172,10 +172,11 @@ const ImageUploadWithCompression = ({
       onChange?.(nextValue);
       onUploadComplete?.(multiple ? processed : processed[0]);
       const hasCompressionWarning = processed.some((item) => item.compressionWarning);
+      const uploadedLabel = selected.length === 1 ? selected[0].name : `${selected.length} images`;
       toast.success(
         hasCompressionWarning
-          ? `${selected.length} image${selected.length > 1 ? 's' : ''} uploaded with compression warning`
-          : `${selected.length} image${selected.length > 1 ? 's' : ''} ready near ${maxSizeKB}KB`,
+          ? `Image uploaded - ${uploadedLabel} (compression warning)`
+          : `Image uploaded - ${uploadedLabel}`,
         { id: toastId }
       );
       if (inputRef.current) inputRef.current.value = '';
@@ -186,7 +187,7 @@ const ImageUploadWithCompression = ({
         : error.message || 'Image compression/upload failed';
       setUploadError(message);
       setOverallProgress('error', 0);
-      toast.error(message, { id: toastId });
+      toast.error(`Failed - ${message}`, { id: toastId });
       setItems((state) => state.map((item) => item.status === 'compressing' || item.status === 'uploading' ? { ...item, status: 'error', error: message } : item));
     } finally {
       clearTimeout(hardTimeout);

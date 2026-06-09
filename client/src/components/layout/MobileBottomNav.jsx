@@ -1,63 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CalendarCheck, Menu, Newspaper, Phone, Star, X } from 'lucide-react';
 
 const drawerLinks = [
-  { hash: '#home', tab: 'home', label: 'Home' },
-  { hash: '#graphs', tab: 'super6', label: 'Super 6 Progress' },
-  { hash: '#news', tab: 'news', label: 'News' },
-  { hash: '#daily', tab: 'daily', label: 'Daily Works' },
-  { hash: '#leader', tab: 'leader', label: 'Leader' },
-  { hash: '#donate', tab: 'donate', label: 'Donate' },
-  { hash: '#contact', tab: 'contact', label: 'Contact' }
+  { to: '/', label: 'Home' },
+  { to: '/daily-work', label: 'Daily Works' },
+  { to: '/schemes', label: 'Schemes' },
+  { to: '/news', label: 'News' },
+  { to: '/leaders', label: 'Leader' },
+  { to: '/contact', label: 'Contact' }
 ];
 
 const MobileBottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('home');
   const [arrivingHome, setArrivingHome] = useState(false);
+  const arrivingTimer = useRef(null);
 
-  const jump = (hash, tab = 'home') => {
+  const activeTab = useMemo(() => {
+    if (location.pathname === '/') return 'home';
+    if (location.pathname.startsWith('/daily-work')) return 'daily';
+    if (location.pathname.startsWith('/schemes')) return 'schemes';
+    if (location.pathname.startsWith('/news')) return 'news';
+    return '';
+  }, [location.pathname]);
+
+  const goToRoute = (to, tab = '') => {
     setMenuOpen(false);
-    setActiveTab(tab);
     if (tab === 'home') {
+      if (arrivingTimer.current) window.clearTimeout(arrivingTimer.current);
       setArrivingHome(true);
-      window.setTimeout(() => setArrivingHome(false), 560);
+      arrivingTimer.current = window.setTimeout(() => setArrivingHome(false), 560);
     }
-
-    if (location.pathname !== '/') {
-      navigate('/');
-      window.setTimeout(() => scrollToHash(hash), 170);
-      return;
-    }
-
-    scrollToHash(hash);
+    navigate(to);
   };
 
-  useEffect(() => {
-    if (location.pathname !== '/') return;
-
-    const sections = [
-      ['home', '#home'],
-      ['super6', '#graphs'],
-      ['news', '#news'],
-      ['daily', '#daily']
-    ];
-
-    const onScroll = () => {
-      const current = sections.findLast(([, hash]) => {
-        const element = document.querySelector(hash);
-        return element && element.getBoundingClientRect().top <= 140;
-      });
-      if (current) setActiveTab(current[0]);
-    };
-
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [location.pathname]);
+  useEffect(() => () => {
+    if (arrivingTimer.current) window.clearTimeout(arrivingTimer.current);
+  }, []);
 
   return (
     <>
@@ -69,20 +50,20 @@ const MobileBottomNav = () => {
           />
         </svg>
         <div className="tab-items-row">
-          <Tab icon={Star} label="Super 6" active={activeTab === 'super6'} badge="6" onClick={() => jump('#graphs', 'super6')} />
-          <Tab icon={Newspaper} label="News" active={activeTab === 'news'} onClick={() => jump('#news', 'news')} />
+          <Tab icon={Star} label="Schemes" active={activeTab === 'schemes'} badge="6" onClick={() => goToRoute('/schemes', 'schemes')} />
+          <Tab icon={Newspaper} label="News" active={activeTab === 'news'} onClick={() => goToRoute('/news', 'news')} />
           <div className="tab-home-container">
             <button
               type="button"
               className={`tab-home-btn ${activeTab === 'home' ? 'is-home-active' : ''} ${arrivingHome ? 'arriving' : ''}`}
-              onClick={() => jump('#home', 'home')}
+              onClick={() => goToRoute('/', 'home')}
               aria-label="Home page"
             >
               <BicycleSvg />
               <span className="tab-home-label">Home</span>
             </button>
           </div>
-          <Tab icon={CalendarCheck} label="Daily" active={activeTab === 'daily'} onClick={() => jump('#daily', 'daily')} />
+          <Tab icon={CalendarCheck} label="Daily Works" active={activeTab === 'daily'} onClick={() => goToRoute('/daily-work', 'daily')} />
           <Tab icon={Menu} label="Menu" active={menuOpen} onClick={() => setMenuOpen(true)} />
         </div>
       </nav>
@@ -100,9 +81,9 @@ const MobileBottomNav = () => {
           </div>
           <nav className="drawer-nav">
             {drawerLinks.map((item) => (
-              <button key={item.hash} type="button" className="drawer-link w-full text-left" onClick={() => jump(item.hash, item.tab)}>
+              <Link key={item.to} to={item.to} className="drawer-link w-full text-left" onClick={() => setMenuOpen(false)}>
                 {item.label}
-              </button>
+              </Link>
             ))}
             <Link to="/super6" onClick={() => setMenuOpen(false)} className="drawer-link">Super 6 Schemes</Link>
             <Link to="/narasaraopet" onClick={() => setMenuOpen(false)} className="drawer-link">Full Constituency Page</Link>
@@ -114,11 +95,6 @@ const MobileBottomNav = () => {
       </div>
     </>
   );
-};
-
-const scrollToHash = (hash) => {
-  const target = document.querySelector(hash);
-  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 const Tab = ({ icon: Icon, label, active, badge, onClick }) => (

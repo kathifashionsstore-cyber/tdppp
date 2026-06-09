@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DEFAULT_HERO_IMAGE } from '@/utils/constants';
 import { getLangField } from '@/utils/helpers';
@@ -17,42 +17,100 @@ const MlaHero = ({ slides = [] }) => {
     return rows.length ? rows : fallbackSlides;
   }, [slides]);
   const [index, setIndex] = useState(0);
-  const [touchStart, setTouchStart] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const sectionRef = useRef(null);
+  const touchStart = useRef(null);
+  const touchCurrent = useRef(null);
 
   useEffect(() => {
     if (index >= activeSlides.length) setIndex(0);
   }, [activeSlides.length, index]);
 
   useEffect(() => {
-    if (activeSlides.length <= 1) return undefined;
-    const timer = window.setInterval(() => setIndex((value) => (value + 1) % activeSlides.length), 2000);
-    return () => window.clearInterval(timer);
-  }, [activeSlides.length]);
+    const frame = window.requestAnimationFrame(() => setReady(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
-  const go = (direction) => {
-    setIndex((value) => (value + direction + activeSlides.length) % activeSlides.length);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setPrefersReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (prefersReducedMotion) return undefined;
+    const node = sectionRef.current;
+    if (!node) return undefined;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const rect = node.getBoundingClientRect();
+      const offset = Math.max(-12, Math.min(18, rect.top * -0.04));
+      node.style.setProperty('--hero-parallax-y', `${offset}px`);
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule, { passive: true });
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [prefersReducedMotion]);
+
+  useEffect(() => {
+    if (activeSlides.length <= 1) return undefined;
+    const timer = window.setTimeout(() => setIndex((value) => (value + 1) % activeSlides.length), 2000);
+    return () => window.clearTimeout(timer);
+  }, [activeSlides.length, index]);
+
+  const goTo = (nextIndex) => {
+    setIndex((nextIndex + activeSlides.length) % activeSlides.length);
+  };
+
+  const go = (direction) => goTo(index + direction);
+
+  const onTouchStart = (event) => {
+    touchStart.current = event.touches[0].clientX;
+    touchCurrent.current = touchStart.current;
+  };
+
+  const onTouchMove = (event) => {
+    touchCurrent.current = event.touches[0].clientX;
   };
 
   const onTouchEnd = (event) => {
-    if (touchStart == null) return;
-    const delta = event.changedTouches[0].clientX - touchStart;
+    if (touchStart.current == null) return;
+    const delta = (touchCurrent.current ?? event.changedTouches[0].clientX) - touchStart.current;
     if (Math.abs(delta) > 42) go(delta > 0 ? -1 : 1);
-    setTouchStart(null);
+    touchStart.current = null;
+    touchCurrent.current = null;
   };
 
   return (
-    <section className="relative h-[45vh] min-h-[260px] overflow-hidden bg-slate-950 md:h-[55vh] lg:h-[70vh]">
-      <div className="absolute inset-0" onTouchStart={(event) => setTouchStart(event.touches[0].clientX)} onTouchEnd={onTouchEnd}>
+    <section ref={sectionRef} className="relative h-[45vh] overflow-hidden bg-slate-950 md:h-[55vh] lg:h-[70vh]" style={{ touchAction: 'pan-y' }}>
+      <div className="absolute inset-0" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
         {activeSlides.map((slide, slideIndex) => (
-          <div key={slide.id || slide.image || slideIndex} className={`absolute inset-0 transition-opacity duration-700 ease-out ${slideIndex === index ? 'opacity-100' : 'opacity-0'}`}>
-            <picture>
+          <div key={slide.id || slide.image || slideIndex} className={`hero-slide-frame absolute inset-0 ${ready && slideIndex === index ? 'is-active' : ''}`} aria-hidden={slideIndex !== index}>
+            <picture className="block h-full w-full">
               <source media="(max-width: 640px)" srcSet={slide.imageMobile || slide.image || DEFAULT_HERO_IMAGE} />
               <source media="(min-width: 641px)" srcSet={slide.imageDesktop || slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE} />
               <img
                 src={slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE}
                 alt={getLangField(slide, 'alt', language) || getLangField(slide, 'title', language) || slide.label || 'Narasaraopet TDP hero slide'}
                 loading={slideIndex === 0 ? 'eager' : 'lazy'}
-                className={`h-full w-full object-cover object-center ${slideIndex === index ? 'animate-hero-kenburns' : ''}`}
+                fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
+                decoding="async"
+                width="1600"
+                height="900"
+                sizes="100vw"
+                className="hero-slide-image"
               />
             </picture>
           </div>
@@ -72,7 +130,7 @@ const MlaHero = ({ slides = [] }) => {
 
       <div className="absolute inset-x-0 bottom-3 flex justify-center gap-2">
         {activeSlides.map((slide, dotIndex) => (
-          <button key={slide.id || dotIndex} type="button" onClick={() => setIndex(dotIndex)} className={`h-2 rounded-full transition-all ${dotIndex === index ? 'w-6 bg-tdp-yellow' : 'w-2 bg-white/70'}`} aria-label={`Go to hero slide ${dotIndex + 1}`} />
+          <button key={slide.id || dotIndex} type="button" onClick={() => goTo(dotIndex)} className={`hero-dot ${dotIndex === index ? 'is-active' : ''}`} aria-label={`Go to hero slide ${dotIndex + 1}`} />
         ))}
       </div>
     </section>

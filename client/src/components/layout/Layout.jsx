@@ -18,7 +18,7 @@ const Layout = () => {
     trackPageView(page);
   }, [location.pathname]);
   return (
-    <div className="min-h-screen bg-[var(--off-white)] pt-9">
+    <div className="min-h-screen bg-[var(--off-white)] pt-8 md:pt-10">
       <AnnouncementBar />
       <Navbar />
       <main className="safe-bottom md:pb-0"><Outlet /></main>

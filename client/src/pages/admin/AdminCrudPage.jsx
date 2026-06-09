@@ -127,13 +127,13 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
           console.warn('Content saved, but chatbot indexing failed:', error);
         });
       }
-      toast.success(`${title} saved`);
+      toast.success('Saved successfully');
       reset();
     } catch (error) {
       const message = error.code === 'permission-denied'
         ? 'Save failed: please log in again with Firebase admin access.'
         : error.message || 'Save failed. Please try again.';
-      toast.error(message);
+      toast.error(`Failed - ${message}`);
       console.error('Admin save failed:', error);
     } finally {
       setSaving(false);
@@ -197,7 +197,7 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
         </div>
       </form>
 
-      {isLoading ? <div className="rounded-2xl bg-white p-6 shadow-sm">Loading...</div> : <ContentTable items={data} onEdit={edit} onDelete={(id) => crud.remove.mutate(id)} language="en" />}
+      {isLoading ? <div className="rounded-2xl bg-white p-6 shadow-sm">Loading...</div> : <ContentTable items={data} onEdit={edit} onDelete={(id) => crud.remove.mutateAsync(id)} language="en" />}
     </div>
   );
 };

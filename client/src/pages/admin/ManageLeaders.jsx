@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { db } from '@/services/firebase';
 import ImageUploadWithCompression from '@/components/admin/ImageUploadWithCompression';
 import { LEADERS_DATA } from '@/data/leadersData';
+import { toastError } from '@/utils/toastUtils.jsx';
 
 const ManageLeaders = () => {
   const [leaders, setLeaders] = useState([]);
@@ -21,9 +22,9 @@ const ManageLeaders = () => {
     setSaving(true);
     try {
       await setDoc(doc(db, 'siteConfig', 'leaders'), { list: leaders });
-      toast.success('Leaders saved');
-    } catch {
-      toast.error('Save failed');
+      toast.success('Saved successfully');
+    } catch (error) {
+      toastError(error, 'Save failed');
     } finally {
       setSaving(false);
     }

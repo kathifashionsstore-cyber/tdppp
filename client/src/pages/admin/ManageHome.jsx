@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Edit, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import { useDoc, useCrud } from '@/hooks/useFirestore';
 import ImageUploader from '@/components/admin/ImageUploader';
+import { confirmToast, toastError } from '@/utils/toastUtils.jsx';
 
 const initialSlide = { title_en: '', subtitle_en: '', tag_en: '', ctaText_en: '', ctaLink: '/daily-work', image: '' };
 
@@ -24,9 +25,19 @@ const ManageHome = () => {
   };
 
   const remove = async (id) => {
-    await crud.set.mutateAsync({ id: 'home', data: { ...data, slides: slides.filter((item) => item.id !== id) } });
-    toast.success('Slide deleted');
-    if (editingId === id) reset();
+    const confirmed = await confirmToast({
+      title: 'Delete slide?',
+      message: 'Delete this home hero slide? This cannot be undone after saving.',
+      confirmLabel: 'Delete'
+    });
+    if (!confirmed) return;
+    try {
+      await crud.set.mutateAsync({ id: 'home', data: { ...data, slides: slides.filter((item) => item.id !== id) } });
+      toast.success('Slide deleted');
+      if (editingId === id) reset();
+    } catch (error) {
+      toastError(error, 'Slide delete failed');
+    }
   };
 
   const save = async () => {
@@ -40,9 +51,13 @@ const ManageHome = () => {
       ctaText_te: slide.ctaText_en
     };
     const nextSlides = editingId ? slides.map((item) => item.id === editingId ? payload : item) : [...slides, payload];
-    await crud.set.mutateAsync({ id: 'home', data: { ...data, slides: nextSlides } });
-    toast.success(editingId ? 'Slide updated' : 'Slide added');
-    reset();
+    try {
+      await crud.set.mutateAsync({ id: 'home', data: { ...data, slides: nextSlides } });
+      toast.success('Saved successfully');
+      reset();
+    } catch (error) {
+      toastError(error, 'Slide save failed');
+    }
   };
   return (
     <div className="grid gap-6">

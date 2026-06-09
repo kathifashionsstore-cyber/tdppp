@@ -33,9 +33,9 @@ const ManageAbout = () => {
     try {
       const payload = await translatePayloadFields(form);
       await crud.set.mutateAsync({ id: 'about', data: payload });
-      toast.success('About/MLA information saved');
+      toast.success('Saved successfully');
     } catch (error) {
-      toast.error(error.message || 'Save failed');
+      toast.error(`Failed - ${error.message || 'Save failed'}`);
     } finally {
       setSaving(false);
     }

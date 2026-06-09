@@ -4,6 +4,7 @@ import { ImagePlus, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { useCrud, useDoc } from '@/hooks/useFirestore';
 import ImageUploader from '@/components/admin/ImageUploader';
 import { translatePayloadFields } from '@/services/translationService';
+import { confirmToast } from '@/utils/toastUtils.jsx';
 
 const HERO_PAGES = [
   { key: 'home', label: 'Home', title: 'Dr. Chadalavada Aravinda Babu', subtitle: 'MLA - Narasaraopet, Telugu Desam Party' },
@@ -57,7 +58,14 @@ const ManageHero = () => {
   const setSlides = (nextSlides) => setDraft((state) => ({ ...state, slides: nextSlides }));
   const addSlide = () => setSlides([...(draft.slides || []), makeSlide((draft.slides || []).length + 1)]);
   const updateSlide = (id, fields) => setSlides((draft.slides || []).map((slide) => slide.id === id ? { ...slide, ...fields } : slide));
-  const removeSlide = (id) => setSlides((draft.slides || []).filter((slide) => slide.id !== id));
+  const removeSlide = async (id) => {
+    const confirmed = await confirmToast({
+      title: 'Delete hero banner?',
+      message: 'Remove this banner from the current draft?',
+      confirmLabel: 'Delete'
+    });
+    if (confirmed) setSlides((draft.slides || []).filter((slide) => slide.id !== id));
+  };
   const reset = () => setDraft({ ...defaultDoc(activePage), ...(data || {}), pageKey: activePage.key, slides: data?.slides || [] });
 
   const save = async () => {
@@ -90,9 +98,9 @@ const ManageHero = () => {
           slides: translatedSlides
         }
       });
-      toast.success(`${activePage.label} hero banners saved`);
+      toast.success('Saved successfully');
     } catch (error) {
-      toast.error(error.message || 'Unable to save hero banners');
+      toast.error(`Failed - ${error.message || 'Unable to save hero banners'}`);
     } finally {
       setSaving(false);
     }

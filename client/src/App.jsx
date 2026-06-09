@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
 import Layout from '@/components/layout/Layout';
 import AdminLayout from '@/components/admin/AdminLayout';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -41,6 +42,16 @@ const Page = ({ children }) => (
 
 const App = () => {
   const location = useLocation();
+  const [isMobileToast, setIsMobileToast] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobileToast(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
   return (
     <>
       <Suspense fallback={<LoadingSpinner fullScreen />}>
@@ -91,6 +102,15 @@ const App = () => {
           </AnimatePresence>
         </ErrorBoundary>
       </Suspense>
+      <Toaster
+        position={isMobileToast ? 'top-center' : 'top-right'}
+        containerStyle={{ zIndex: 99999 }}
+        toastOptions={{
+          duration: 3000,
+          success: { duration: 3000 },
+          error: { duration: 5000 }
+        }}
+      />
     </>
   );
 };

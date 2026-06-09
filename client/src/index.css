@@ -69,6 +69,14 @@ body {
 [lang='te'], .telugu { font-family: var(--font-telugu); }
 a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; }
+button,
+a,
+[role='button'],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
 .container-page { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
 .prose-content :is(p, ul, ol) { margin-bottom: 1rem; }
 .safe-bottom { padding-bottom: calc(var(--bottom-nav-h) + 16px); }
@@ -97,8 +105,8 @@ img { max-width: 100%; display: block; }
   to { width: 100%; }
 }
 @keyframes heroKenburns {
-  0% { transform: scale(1.02) translate3d(0, 0, 0); }
-  100% { transform: scale(1.12) translate3d(1.5%, -1%, 0); }
+  0% { transform: scale(1) translate3d(0, 0, 0); }
+  100% { transform: scale(1.08) translate3d(1%, -1%, 0); }
 }
 @keyframes goldGlow {
   from { box-shadow: 0 0 10px rgba(255, 215, 0, 0.35); }
@@ -131,6 +139,34 @@ img { max-width: 100%; display: block; }
   0%, 100% { transform: rotate(-1deg) translateX(0); }
   50% { transform: rotate(1deg) translateX(1px); }
 }
+@keyframes heroDotExpand {
+  from { transform: scaleX(0.4); }
+  to { transform: scaleX(1); }
+}
+@keyframes chatButtonPulse {
+  0%, 100% { opacity: .35; transform: scale(1); }
+  50% { opacity: .72; transform: scale(1.24); }
+}
+@keyframes announcementMarquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes announcementShimmer {
+  from { transform: translate3d(-120%, 0, 0); }
+  to { transform: translate3d(120%, 0, 0); }
+}
+@keyframes announcementIconRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes announcementPhonePulse {
+  0%, 100% { transform: scale(1); opacity: .8; }
+  50% { transform: scale(1.14); opacity: 1; }
+}
+@keyframes benefitBarIn {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
 .animate-cycle-run { display: inline-flex; animation: cycleRun .42s linear infinite; transform-origin: center bottom; }
 .animate-loader-cycle { animation: loaderCycle 1.05s ease-in-out infinite; }
 .animate-super-six-glow { animation: superSixGlow 2.3s ease-in-out infinite; }
@@ -157,6 +193,105 @@ img { max-width: 100%; display: block; }
 }
 .animate-home-pulse { animation: homePulse 3s ease-in-out infinite; }
 .announcement-slide { animation: announcementSlide 3s ease-in-out both; }
+
+.hero-slide-frame {
+  opacity: 0;
+  transform: scale(.985) translate3d(0, 0, 0);
+  transition: opacity 800ms cubic-bezier(.4, 0, .2, 1), transform 800ms cubic-bezier(.4, 0, .2, 1);
+  will-change: transform, opacity;
+}
+.hero-slide-frame.is-active {
+  opacity: 1;
+  transform: scale(1) translate3d(0, 0, 0);
+  z-index: 1;
+}
+.hero-slide-image {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: center top;
+  transform: translate3d(0, var(--hero-parallax-y, 0px), 0);
+  will-change: transform, opacity;
+}
+.hero-slide-frame.is-active .hero-slide-image {
+  animation: heroKenburns 2s ease-out forwards;
+}
+.hero-dot {
+  position: relative;
+  display: grid;
+  min-height: 24px;
+  min-width: 24px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+.hero-dot::before {
+  content: '';
+  display: block;
+  height: 12px;
+  width: 12px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,.72);
+  transition: width 800ms cubic-bezier(.4, 0, .2, 1), background-color 800ms cubic-bezier(.4, 0, .2, 1);
+  transform-origin: center;
+}
+.hero-dot.is-active::before {
+  width: 20px;
+  background: var(--tdp-yellow);
+  animation: heroDotExpand 800ms cubic-bezier(.4, 0, .2, 1) both;
+}
+
+.chatbot-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: 9999px;
+  background: rgba(255, 215, 0, .52);
+  animation: chatButtonPulse 3s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.announcement-bar {
+  background: linear-gradient(90deg, #FFD700 0%, #F5A623 48%, #FFD700 100%);
+}
+.announcement-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 18%, rgba(255,255,255,.42) 45%, transparent 72%);
+  animation: announcementShimmer 4.5s linear infinite;
+  will-change: transform;
+}
+.announcement-track {
+  display: inline-flex;
+  width: max-content;
+  min-width: 200%;
+  align-items: center;
+  white-space: nowrap;
+  animation: announcementMarquee 20s linear infinite;
+  will-change: transform;
+}
+.announcement-bar:hover .announcement-track {
+  animation-play-state: paused;
+}
+.announcement-icon-rotate {
+  animation: announcementIconRotate 7s linear infinite;
+  will-change: transform;
+}
+.announcement-phone-pulse {
+  animation: announcementPhonePulse 2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.benefit-bar-fill {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+.benefit-bar-fill.is-visible {
+  animation: benefitBarIn 900ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
 
 .mobile-tab-bar {
   position: fixed;
@@ -376,21 +511,21 @@ img { max-width: 100%; display: block; }
 }
 
 .hero-slider-height {
-  height: 280px;
-  min-height: 280px;
+  height: 45vh;
+  min-height: 0;
 }
 
 @media (max-width: 360px) {
   .hero-slider-height {
-    height: 220px;
-    min-height: 220px;
+    height: 45vh;
+    min-height: 0;
   }
 }
 
 @media (min-width: 481px) and (max-width: 767px) {
   .hero-slider-height {
-    height: 380px;
-    min-height: 380px;
+    height: 45vh;
+    min-height: 0;
   }
 }
 
@@ -405,5 +540,32 @@ img { max-width: 100%; display: block; }
   .hero-slider-height {
     height: 480px;
     min-height: 480px;
+  }
+}
+
+@media (max-width: 767px) {
+  .announcement-track {
+    animation-duration: 15s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .hero-slide-frame.is-active .hero-slide-image,
+  .announcement-track,
+  .announcement-bar::before,
+  .chatbot-pulse::before,
+  .benefit-bar-fill.is-visible {
+    animation: none !important;
+  }
+  .benefit-bar-fill.is-visible {
+    transform: scaleX(1);
   }
 }
