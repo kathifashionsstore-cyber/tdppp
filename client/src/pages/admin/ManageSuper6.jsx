@@ -65,6 +65,7 @@ const thumbnailDraft = (scheme, item) => ({
   playlistThumbnail: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
   thumbnailUrl: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
   thumbnailPath: item?.thumbnailPath || item?.playlistThumbnailPath || item?.videoThumbnailPath || '',
+  previewUrl: '',
   thumbnailLabel_en: item?.thumbnailLabel_en || `${item?.title_en || scheme.nameEn} Video`
 });
 
@@ -106,15 +107,23 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
     ...state,
     playlistThumbnail: url,
     thumbnailUrl: url,
-    ...(!url ? { thumbnailPath: '' } : {})
+    ...(!url ? { thumbnailPath: '', previewUrl: '' } : {})
   }));
+  const updateLocalPreview = (uploaded) => {
+    if (!uploaded?.previewUrl) return;
+    setDraft((state) => ({
+      ...state,
+      previewUrl: uploaded.previewUrl
+    }));
+  };
   const updateUploadedThumbnail = (uploaded) => {
     if (!uploaded) return;
     setDraft((state) => ({
       ...state,
       playlistThumbnail: uploaded.url || uploaded.downloadURL || state.playlistThumbnail,
       thumbnailUrl: uploaded.url || uploaded.downloadURL || state.thumbnailUrl,
-      thumbnailPath: uploaded.path || uploaded.fullPath || state.thumbnailPath || ''
+      thumbnailPath: uploaded.path || uploaded.fullPath || state.thumbnailPath || '',
+      previewUrl: ''
     }));
   };
 
@@ -161,12 +170,13 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
           aspectRatio="16/9"
           storageFolder={`super6/thumbnails/${scheme.id}`}
           onUploadStateChange={setImageUploading}
+          onUpload={updateLocalPreview}
           onChange={updateThumbnail}
           onUploadComplete={updateUploadedThumbnail}
         />
         <div className="grid content-start gap-3">
           <input className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" placeholder={`${scheme.nameEn} Video`} value={draft.thumbnailLabel_en || ''} onChange={(event) => update('thumbnailLabel_en', event.target.value)} />
-          <ThumbnailPreview source={draft.thumbnailUrl || draft.playlistThumbnail} path={draft.thumbnailPath} />
+          <ThumbnailPreview source={draft.previewUrl || draft.thumbnailUrl || draft.playlistThumbnail} path={draft.thumbnailPath} isUploading={imageUploading} />
         </div>
       </div>
       <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
@@ -364,7 +374,7 @@ const ManageSuper6 = () => {
   );
 };
 
-const ThumbnailPreview = ({ source, path }) => {
+const ThumbnailPreview = ({ source, path, isUploading }) => {
   const [failed, setFailed] = useState(false);
   const { src, isResolving } = useResolvedImage(failed && path ? path : source, path);
 
@@ -378,7 +388,7 @@ const ThumbnailPreview = ({ source, path }) => {
         <img src={src} alt="" className="aspect-video w-full object-cover" onError={() => setFailed(true)} />
       ) : (
         <div className="grid aspect-video place-items-center text-slate-400">
-          {isResolving ? 'Loading thumbnail...' : <ImagePlus size={30} />}
+          {isUploading || isResolving ? 'Preparing thumbnail...' : <ImagePlus size={30} />}
         </div>
       )}
     </div>
