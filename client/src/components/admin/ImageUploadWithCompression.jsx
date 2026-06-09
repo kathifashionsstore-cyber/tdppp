@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CheckCircle2, ImagePlus, Loader2, RefreshCw, Trash2, UploadCloud, X } from 'lucide-react';
-import { compressImageFile, formatFileSize, uploadCompressedImageToImgBB } from '@/services/imgbbService';
+import { compressImageFile, formatFileSize, uploadCompressedImage } from '@/services/imgbbService';
+import useResolvedImage from '@/hooks/useResolvedImage';
 
 const defaultAccept = 'image/jpeg,image/png,image/webp';
 
@@ -10,11 +11,13 @@ const ImageUploadWithCompression = ({
   value = [],
   onChange,
   onUpload,
+  onUploadComplete,
   onUploadStateChange,
   multiple = false,
   aspectRatio = '16/9',
   maxSizeKB = 300,
-  accept = defaultAccept
+  accept = defaultAccept,
+  storageFolder = 'uploads/images'
 }) => {
   const inputRef = useRef(null);
   const previewUrlsRef = useRef([]);
@@ -72,22 +75,29 @@ const ImageUploadWithCompression = ({
         } : item));
 
         onUpload?.({ ...compressed, previewUrl });
-        const uploaded = await uploadCompressedImageToImgBB(compressed.file, (progress) => {
-          setItems((state) => state.map((item) => item.id === rowId ? { ...item, progress, status: 'uploading' } : item));
+        const uploaded = await uploadCompressedImage(compressed.file, {
+          folder: storageFolder,
+          onProgress: (progress) => {
+            setItems((state) => state.map((item) => item.id === rowId ? { ...item, progress, status: 'uploading' } : item));
+          }
         });
+        const uploadedUrl = uploaded.url || uploaded.downloadURL || uploaded.displayUrl || '';
 
-        uploadedUrls.push(uploaded.url);
-        processed.push({ ...compressed, previewUrl, url: uploaded.url });
+        uploadedUrls.push(uploadedUrl);
+        processed.push({ ...compressed, ...uploaded, previewUrl, url: uploadedUrl });
         setItems((state) => state.map((item) => item.id === rowId ? {
           ...item,
           status: 'ready',
-          url: uploaded.url,
+          url: uploadedUrl,
+          path: uploaded.path || uploaded.fullPath || '',
+          storageProvider: uploaded.storageProvider,
           progress: 100
         } : item));
       }
 
       const nextValue = multiple ? [...urls, ...uploadedUrls] : uploadedUrls[0] || '';
       onChange?.(nextValue);
+      onUploadComplete?.(multiple ? processed : processed[0]);
       toast.success(`${selected.length} image${selected.length > 1 ? 's' : ''} ready under ${maxSizeKB}KB`, { id: toastId });
       if (inputRef.current) inputRef.current.value = '';
     } catch (error) {
@@ -155,14 +165,36 @@ const ImageUploadWithCompression = ({
       {!!urls.length && (
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {urls.map((url) => (
-            <div key={url} className="relative">
-              <img src={url} className="h-24 w-full rounded-lg object-cover" alt="" />
-              <span className="absolute left-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-green-600 text-white"><CheckCircle2 size={14} /></span>
-              <button type="button" disabled={busy} onClick={() => remove(url)} className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-red-600 text-white disabled:opacity-50" aria-label="Remove image"><Trash2 size={14} /></button>
-            </div>
+            <UploadedImagePreview key={url} url={url} busy={busy} onRemove={() => remove(url)} />
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const UploadedImagePreview = ({ url, busy, onRemove }) => {
+  const { src, isResolving } = useResolvedImage(url);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  return (
+    <div className="relative">
+      <div className="grid h-24 w-full place-items-center overflow-hidden rounded-lg bg-slate-100 text-slate-400">
+        {src && !failed ? (
+          <img src={src} className="h-full w-full object-cover" alt="" onError={() => setFailed(true)} />
+        ) : (
+          <div className="grid gap-1 text-center text-xs font-bold">
+            {isResolving ? <RefreshCw size={18} className="mx-auto animate-spin" /> : <ImagePlus size={20} className="mx-auto" />}
+            <span>{isResolving ? 'Loading' : 'No preview'}</span>
+          </div>
+        )}
+      </div>
+      <span className="absolute left-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-green-600 text-white"><CheckCircle2 size={14} /></span>
+      <button type="button" disabled={busy} onClick={onRemove} className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-red-600 text-white disabled:opacity-50" aria-label="Remove image"><Trash2 size={14} /></button>
     </div>
   );
 };

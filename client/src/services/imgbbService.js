@@ -1,9 +1,24 @@
 import imageCompression from 'browser-image-compression';
+import { getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
+import { storage } from './firebase';
 
 const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY || '202b1fcbad15a90cccbd9e2a44bcb4fa';
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 export const MAX_IMAGE_UPLOAD_BYTES = 300 * 1024;
 export const MAX_IMAGE_UPLOAD_KB = 300;
+
+const safeStorageSegment = (value = 'image') => String(value)
+  .trim()
+  .replace(/\.[^/.]+$/, '')
+  .replace(/[^a-z0-9-_]+/gi, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase() || 'image';
+
+const safeStorageFolder = (folder = 'uploads/images') => String(folder)
+  .split('/')
+  .map(safeStorageSegment)
+  .filter(Boolean)
+  .join('/');
 
 export const formatFileSize = (bytes = 0) => {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -70,10 +85,12 @@ export const uploadCompressedImageToImgBB = async (compressedFile, onProgress) =
         try {
           const response = JSON.parse(xhr.responseText);
           if (response.success) resolve({
-            url: response.data.url,
+            url: response.data.display_url || response.data.url,
+            originalUrl: response.data.url,
             displayUrl: response.data.display_url,
             deleteUrl: response.data.delete_url,
-            id: response.data.id
+            id: response.data.id,
+            storageProvider: 'imgbb'
           });
           else reject(new Error(response.error?.message || 'ImgBB upload failed'));
         } catch (error) {
@@ -86,6 +103,59 @@ export const uploadCompressedImageToImgBB = async (compressedFile, onProgress) =
     };
     reader.onerror = () => reject(new Error('File read error'));
   });
+};
+
+export const uploadCompressedImageToFirebaseStorage = async (compressedFile, { folder = 'uploads/images', onProgress } = {}) => {
+  if (compressedFile.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error('Image too large. Maximum allowed size is 300KB. Please compress before uploading.');
+  }
+
+  const cleanFolder = safeStorageFolder(folder);
+  const cleanName = safeStorageSegment(compressedFile.name);
+  const fullPath = `${cleanFolder}/${Date.now()}-${cleanName}.webp`;
+  const targetRef = storageRef(storage, fullPath);
+
+  const snapshot = await new Promise((resolve, reject) => {
+    const uploadTask = uploadBytesResumable(targetRef, compressedFile, {
+      contentType: compressedFile.type || 'image/webp',
+      customMetadata: {
+        originalName: compressedFile.name
+      }
+    });
+
+    uploadTask.on(
+      'state_changed',
+      (state) => {
+        if (state.totalBytes && onProgress) {
+          onProgress(Math.round((state.bytesTransferred / state.totalBytes) * 100));
+        }
+      },
+      reject,
+      () => resolve(uploadTask.snapshot)
+    );
+  });
+
+  const downloadURL = await getDownloadURL(snapshot.ref);
+  return {
+    url: downloadURL,
+    downloadURL,
+    path: snapshot.ref.fullPath,
+    fullPath: snapshot.ref.fullPath,
+    storageProvider: 'firebase'
+  };
+};
+
+export const uploadCompressedImage = async (compressedFile, { folder, onProgress, fallbackToImgBB = true } = {}) => {
+  try {
+    return await uploadCompressedImageToFirebaseStorage(compressedFile, { folder, onProgress });
+  } catch (error) {
+    if (!fallbackToImgBB) throw error;
+    const fallback = await uploadCompressedImageToImgBB(compressedFile, onProgress);
+    return {
+      ...fallback,
+      firebaseError: error.message || 'Firebase Storage upload failed'
+    };
+  }
 };
 
 export const uploadImageToImgBB = async (file, onProgress) => {

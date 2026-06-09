@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ArrowUp, BookOpen, Film, PlayCircle } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookOpen, Film, ImagePlus, PlayCircle } from 'lucide-react';
 import PageHero from './PageHero';
 import { useCollection } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
 import { getLangField, sanitizeHtml } from '@/utils/helpers';
 import { useLanguage } from '@/hooks/useLanguage';
+import useResolvedImage from '@/hooks/useResolvedImage';
 
 const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   id: scheme.id,
@@ -19,6 +20,8 @@ const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   description_te: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
   videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
   playlistThumbnail: scheme.poster || scheme.image,
+  thumbnailUrl: scheme.poster || scheme.image,
+  thumbnailPath: '',
   thumbnailLabel_en: `${scheme.nameEn} Video`,
   thumbnailLabel_te: `${scheme.nameTe} Video`,
   isPublished: true,
@@ -35,7 +38,7 @@ const findAdminScheme = (items, fallback, index) => items.find((item) => (
 
 const Super6 = () => {
   const { language } = useLanguage();
-  const { data = [], isLoading } = useCollection('super6Schemes', { publishedOnly: true, activeOnly: true, orderByField: 'order', orderDirection: 'asc' });
+  const { data = [], isLoading } = useCollection('super6Schemes', { orderByField: 'order', orderDirection: 'asc' });
   const schemes = useMemo(() => {
     const fallbackItems = buildFallback();
     return fallbackItems.map((fallback, index) => {
@@ -69,7 +72,7 @@ const Super6Card = ({ scheme, index, language }) => {
   const title = getLangField(scheme, 'title', language);
   const fullDescription = getLangField(scheme, 'readMore', language) || getLangField(scheme, 'description', language);
   const videos = normalizeVideos(scheme.videos || scheme.videoUrls);
-  const playlistThumbnail = scheme.playlistThumbnail || scheme.thumbnailImage || scheme.videoThumbnail || scheme.thumbnail || scheme.image || scheme.images?.[0] || '/og-image.svg';
+  const playlistThumbnail = scheme.thumbnailUrl || scheme.playlistThumbnail || scheme.thumbnailImage || scheme.videoThumbnail || scheme.thumbnail || scheme.image || scheme.images?.[0] || '/og-image.svg';
   const thumbnailLabel = getLangField(scheme, 'thumbnailLabel', language) || `${title || `Super 6 Scheme ${index + 1}`} Video`;
 
   return (
@@ -83,7 +86,7 @@ const Super6Card = ({ scheme, index, language }) => {
       <div>
         <h3 className="line-clamp-3 text-2xl font-black leading-tight text-tdp-yellow">{title || `Super 6 Scheme ${index + 1}`}</h3>
         <div className="mt-4">
-          <InlineVideoPlaylist videos={videos} cardIndex={index} thumbnail={playlistThumbnail} thumbnailLabel={thumbnailLabel} />
+          <InlineVideoPlaylist videos={videos} cardIndex={index} thumbnail={playlistThumbnail} thumbnailPath={scheme.thumbnailPath} thumbnailLabel={thumbnailLabel} />
         </div>
         <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-tdp-yellow px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-tdp-navy shadow-[0_8px_22px_rgba(245,166,35,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(245,166,35,0.55)]">
           <BookOpen size={16} /> {expanded ? 'Close' : 'Read More'} {expanded ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
@@ -105,11 +108,13 @@ const Super6Card = ({ scheme, index, language }) => {
   );
 };
 
-const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailLabel }) => {
+const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailPath, thumbnailLabel }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [inView, setInView] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [progressMap, setProgressMap] = useState({});
+  const { src: thumbnailSrc, isResolving: thumbnailResolving } = useResolvedImage(thumbnailFailed && thumbnailPath ? thumbnailPath : thumbnail, thumbnailPath);
   const wrapperRef = useRef(null);
   const videoRef = useRef(null);
   const active = videos[activeIndex];
@@ -126,6 +131,10 @@ const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailLabel }) =
     setLoading(true);
     return undefined;
   }, [active?.url]);
+
+  useEffect(() => {
+    setThumbnailFailed(false);
+  }, [thumbnailSrc]);
 
   const switchVideo = (index) => {
     const current = videoRef.current;
@@ -204,9 +213,15 @@ const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailLabel }) =
       </div>
       <button type="button" onClick={playFromThumbnail} className="group/thumbnail mt-3 block w-full text-left">
         <span className="relative block aspect-video w-full overflow-hidden rounded-lg border-2 border-tdp-yellow bg-black">
-          <img src={thumbnail} alt={thumbnailLabel} className="h-full w-full object-cover transition duration-300 group-hover/thumbnail:scale-105" loading="lazy" />
+          {thumbnailSrc && !thumbnailFailed ? (
+            <img src={thumbnailSrc} alt={thumbnailLabel} className="h-full w-full object-cover transition duration-300 group-hover/thumbnail:scale-105" loading="lazy" onError={() => setThumbnailFailed(true)} />
+          ) : (
+            <span className="grid h-full w-full place-items-center px-4 text-center text-sm font-black text-tdp-yellow">
+              {thumbnailResolving ? 'Loading thumbnail...' : <><ImagePlus className="mb-2" size={28} /> No thumbnail uploaded</>}
+            </span>
+          )}
           <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition duration-300 group-hover/thumbnail:bg-black/22 group-hover/thumbnail:opacity-100">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-black/55 text-xl text-white">▶</span>
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-black/55 text-white"><PlayCircle size={24} /></span>
           </span>
         </span>
         <span className="mt-2 block rounded-lg bg-white/8 px-3 py-2 text-sm font-black text-yellow-100">{thumbnailLabel}</span>

@@ -7,6 +7,7 @@ import RichTextEditor from '@/components/admin/RichTextEditor';
 import { useCollection, useCrud } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
 import { translatePayloadFields } from '@/services/translationService';
+import useResolvedImage from '@/hooks/useResolvedImage';
 
 const emptyForm = () => ({
   title_en: '',
@@ -48,13 +49,22 @@ const defaultSchemePayload = (scheme, index) => ({
   image: scheme.image,
   images: [scheme.image],
   videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
+  playlistThumbnail: scheme.poster || scheme.image,
+  thumbnailImage: scheme.poster || scheme.image,
+  videoThumbnail: scheme.poster || scheme.image,
+  thumbnailUrl: scheme.poster || scheme.image,
+  thumbnailPath: '',
+  thumbnailLabel_en: `${scheme.nameEn} Video`,
+  thumbnailLabel_te: `${scheme.nameTe} Video`,
   order: index + 1,
   isPublished: true,
   isActive: true
 });
 
 const thumbnailDraft = (scheme, item) => ({
-  playlistThumbnail: item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
+  playlistThumbnail: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
+  thumbnailUrl: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
+  thumbnailPath: item?.thumbnailPath || item?.playlistThumbnailPath || item?.videoThumbnailPath || '',
   thumbnailLabel_en: item?.thumbnailLabel_en || `${item?.title_en || scheme.nameEn} Video`
 });
 
@@ -92,22 +102,40 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
   }, [item, scheme]);
 
   const update = (key, value) => setDraft((state) => ({ ...state, [key]: value }));
+  const updateThumbnail = (url) => setDraft((state) => ({
+    ...state,
+    playlistThumbnail: url,
+    thumbnailUrl: url,
+    ...(!url ? { thumbnailPath: '' } : {})
+  }));
+  const updateUploadedThumbnail = (uploaded) => {
+    if (!uploaded) return;
+    setDraft((state) => ({
+      ...state,
+      playlistThumbnail: uploaded.url || uploaded.downloadURL || state.playlistThumbnail,
+      thumbnailUrl: uploaded.url || uploaded.downloadURL || state.thumbnailUrl,
+      thumbnailPath: uploaded.path || uploaded.fullPath || state.thumbnailPath || ''
+    }));
+  };
 
   const save = async () => {
     if (imageUploading) return toast.error('Please wait until thumbnail upload finishes');
-    if (!draft.playlistThumbnail) return toast.error(`Upload a thumbnail for ${scheme.nameEn}`);
+    const thumbnailUrl = draft.thumbnailUrl || draft.playlistThumbnail;
+    if (!thumbnailUrl) return toast.error(`Upload a thumbnail for ${scheme.nameEn}`);
     setSaving(true);
     try {
       const payload = await translatePayloadFields({
         ...(item || defaultSchemePayload(scheme, index)),
         schemeId: scheme.id,
         order: index + 1,
-        playlistThumbnail: draft.playlistThumbnail,
-        thumbnailImage: draft.playlistThumbnail,
-        videoThumbnail: draft.playlistThumbnail,
+        playlistThumbnail: thumbnailUrl,
+        thumbnailImage: thumbnailUrl,
+        videoThumbnail: thumbnailUrl,
+        thumbnailUrl,
+        thumbnailPath: draft.thumbnailPath || item?.thumbnailPath || '',
         thumbnailLabel_en: draft.thumbnailLabel_en || `${scheme.nameEn} Video`,
-        isPublished: item?.isPublished !== false,
-        isActive: item?.isActive !== false
+        isPublished: true,
+        isActive: true
       }, ['thumbnailLabel']);
       if (item?.id) await crud.update.mutateAsync({ id: item.id, data: payload });
       else await crud.create.mutateAsync(payload);
@@ -129,16 +157,16 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
       <div className="grid gap-3 md:grid-cols-[240px_1fr]">
         <ImageUploader
           label="Video Playlist Thumbnail"
-          value={draft.playlistThumbnail || ''}
+          value={draft.thumbnailUrl || draft.playlistThumbnail || ''}
           aspectRatio="16/9"
+          storageFolder={`super6/thumbnails/${scheme.id}`}
           onUploadStateChange={setImageUploading}
-          onChange={(url) => update('playlistThumbnail', url)}
+          onChange={updateThumbnail}
+          onUploadComplete={updateUploadedThumbnail}
         />
         <div className="grid content-start gap-3">
           <input className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" placeholder={`${scheme.nameEn} Video`} value={draft.thumbnailLabel_en || ''} onChange={(event) => update('thumbnailLabel_en', event.target.value)} />
-          <div className="overflow-hidden rounded-lg border-2 border-tdp-yellow bg-black">
-            {draft.playlistThumbnail ? <img src={draft.playlistThumbnail} alt="" className="aspect-video w-full object-cover" /> : <div className="grid aspect-video place-items-center text-slate-400"><ImagePlus size={30} /></div>}
-          </div>
+          <ThumbnailPreview source={draft.thumbnailUrl || draft.playlistThumbnail} path={draft.thumbnailPath} />
         </div>
       </div>
       <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
@@ -210,6 +238,8 @@ const ManageSuper6 = () => {
         playlistThumbnail: scheme.poster || scheme.image,
         thumbnailImage: scheme.poster || scheme.image,
         videoThumbnail: scheme.poster || scheme.image,
+        thumbnailUrl: scheme.poster || scheme.image,
+        thumbnailPath: '',
         thumbnailLabel_en: `${scheme.nameEn} Video`,
         thumbnailLabel_te: `${scheme.nameTe} Video`,
         order: index + 1,
@@ -330,6 +360,27 @@ const ManageSuper6 = () => {
       </form>
 
       {isLoading ? <div className="rounded-2xl bg-white p-6 shadow-sm">Loading...</div> : <ContentTable items={data} onEdit={edit} onDelete={(id) => crud.remove.mutate(id)} language="en" />}
+    </div>
+  );
+};
+
+const ThumbnailPreview = ({ source, path }) => {
+  const [failed, setFailed] = useState(false);
+  const { src, isResolving } = useResolvedImage(failed && path ? path : source, path);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  return (
+    <div className="overflow-hidden rounded-lg border-2 border-tdp-yellow bg-black">
+      {src && !failed ? (
+        <img src={src} alt="" className="aspect-video w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <div className="grid aspect-video place-items-center text-slate-400">
+          {isResolving ? 'Loading thumbnail...' : <ImagePlus size={30} />}
+        </div>
+      )}
     </div>
   );
 };
