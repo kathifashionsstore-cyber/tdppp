@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Edit, Eye, ImagePlus, Plus, RotateCcw, Save, Trash2, XCircle } from 'lucide-react';
+import { Eye, ImagePlus, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import ContentTable from '@/components/admin/ContentTable';
 import ImageUploader from '@/components/admin/ImageUploader';
 import RichTextEditor from '@/components/admin/RichTextEditor';
@@ -26,140 +26,125 @@ const emptyForm = () => ({
   isActive: true
 });
 
-const emptyBanner = () => ({
-  title_en: '',
-  title_te: '',
-  image: '',
-  order: 1,
+const findSchemeDoc = (items, scheme, index) => items.find((item) => (
+  item.schemeId === scheme.id
+  || item.sourceId === scheme.id
+  || item.id === scheme.id
+  || item.title_en === scheme.nameEn
+  || Number(item.order) === index + 1
+));
+
+const defaultSchemePayload = (scheme, index) => ({
+  schemeId: scheme.id,
+  title_en: scheme.nameEn,
+  title_te: scheme.nameTe,
+  shortDescription_en: scheme.description,
+  shortDescription_te: scheme.description,
+  description_en: scheme.description,
+  description_te: scheme.description,
+  readMore_en: [scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
+  readMore_te: [scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
+  thumbnail: scheme.image,
+  image: scheme.image,
+  images: [scheme.image],
+  videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
+  order: index + 1,
+  isPublished: true,
   isActive: true
 });
 
-const Super6BannerManager = () => {
-  const { data = [], isLoading } = useCollection('super6Banners', { orderByField: 'order', orderDirection: 'asc' });
-  const crud = useCrud('super6Banners');
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(emptyBanner);
+const thumbnailDraft = (scheme, item) => ({
+  playlistThumbnail: item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
+  thumbnailLabel_en: item?.thumbnailLabel_en || `${item?.title_en || scheme.nameEn} Video`
+});
+
+const Super6ThumbnailManager = ({ items = [] }) => {
+  const crud = useCrud('super6Schemes');
+  const rows = super6Schemes.slice(0, 6).map((scheme, index) => ({
+    scheme,
+    item: findSchemeDoc(items, scheme, index),
+    index
+  }));
+
+  return (
+    <section className="grid gap-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wide text-tdp-red">Super 6 Thumbnail Manager</p>
+        <h2 className="mt-1 text-2xl font-black text-slate-950">Video Playlist Thumbnails</h2>
+        <p className="mt-1 text-sm font-semibold text-slate-500">Upload one compressed 16:9 thumbnail for each fixed Super 6 scheme. These images appear below each public video player.</p>
+      </div>
+      <div className="grid gap-4">
+        {rows.map(({ scheme, item, index }) => (
+          <ThumbnailRow key={scheme.id} scheme={scheme} item={item} index={index} crud={crud} />
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const ThumbnailRow = ({ scheme, item, index, crud }) => {
+  const [draft, setDraft] = useState(() => thumbnailDraft(scheme, item));
   const [imageUploading, setImageUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const banners = useMemo(() => [...data].sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99)), [data]);
-  const update = (key, value) => setForm((state) => ({ ...state, [key]: value }));
 
-  const reset = () => {
-    setEditing(null);
-    setForm(emptyBanner());
-  };
+  useEffect(() => {
+    setDraft(thumbnailDraft(scheme, item));
+  }, [item, scheme]);
 
-  const edit = (banner) => {
-    setEditing(banner.id);
-    setForm({ ...emptyBanner(), ...banner });
-  };
+  const update = (key, value) => setDraft((state) => ({ ...state, [key]: value }));
 
-  const remove = async (id) => {
-    try {
-      await crud.remove.mutateAsync(id);
-      toast.success('Super 6 banner deleted');
-      if (editing === id) reset();
-    } catch (error) {
-      toast.error(error.message || 'Unable to delete banner');
-    }
-  };
-
-  const save = async (event) => {
-    event.preventDefault();
-    if (imageUploading) return toast.error('Please wait until banner image upload finishes');
-    if (!form.image) return toast.error('Upload a banner image before saving');
+  const save = async () => {
+    if (imageUploading) return toast.error('Please wait until thumbnail upload finishes');
+    if (!draft.playlistThumbnail) return toast.error(`Upload a thumbnail for ${scheme.nameEn}`);
     setSaving(true);
     try {
       const payload = await translatePayloadFields({
-        ...form,
-        order: Number(form.order) || banners.length + 1,
-        isActive: form.isActive !== false
-      }, ['title']);
-      if (editing) await crud.update.mutateAsync({ id: editing, data: payload });
+        ...(item || defaultSchemePayload(scheme, index)),
+        schemeId: scheme.id,
+        order: index + 1,
+        playlistThumbnail: draft.playlistThumbnail,
+        thumbnailImage: draft.playlistThumbnail,
+        videoThumbnail: draft.playlistThumbnail,
+        thumbnailLabel_en: draft.thumbnailLabel_en || `${scheme.nameEn} Video`,
+        isPublished: item?.isPublished !== false,
+        isActive: item?.isActive !== false
+      }, ['thumbnailLabel']);
+      if (item?.id) await crud.update.mutateAsync({ id: item.id, data: payload });
       else await crud.create.mutateAsync(payload);
-      toast.success(editing ? 'Super 6 banner updated' : 'Super 6 banner added');
-      reset();
+      toast.success(`${scheme.nameEn} thumbnail saved`);
     } catch (error) {
-      toast.error(error.message || 'Unable to save banner');
+      toast.error(error.message || 'Unable to save thumbnail');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <section className="grid gap-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-tdp-red">Super 6 Page Banner Manager</p>
-          <h2 className="mt-1 text-2xl font-black text-slate-950">Top Banner / Slider</h2>
-          <p className="mt-1 text-sm font-semibold text-slate-500">These compressed images replace the yellow top area on the public Super 6 page.</p>
-        </div>
-        <button type="button" onClick={reset} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700">
-          <RotateCcw size={16} /> New Banner
-        </button>
+    <article className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[220px_1fr_auto] lg:items-start">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500">Scheme {index + 1}</p>
+        <h3 className="mt-1 text-lg font-black text-slate-950">{scheme.nameEn}</h3>
+        <p className="telugu mt-1 text-sm font-bold text-slate-500">{scheme.nameTe}</p>
       </div>
-
-      <form onSubmit={save} className="grid gap-4 lg:grid-cols-[320px_1fr_auto] lg:items-start">
+      <div className="grid gap-3 md:grid-cols-[240px_1fr]">
         <ImageUploader
-          label="Banner Image"
-          value={form.image || ''}
+          label="Video Playlist Thumbnail"
+          value={draft.playlistThumbnail || ''}
           aspectRatio="16/9"
           onUploadStateChange={setImageUploading}
-          onChange={(url) => update('image', url)}
+          onChange={(url) => update('playlistThumbnail', url)}
         />
-        <div className="grid gap-3">
-          <input className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" placeholder="Banner title (optional)" value={form.title_en || ''} onChange={(event) => update('title_en', event.target.value)} />
-          <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
-            <input type="number" min="1" className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Order" value={form.order || 1} onChange={(event) => update('order', Number(event.target.value))} />
-            <label className="flex min-h-12 items-center gap-2 rounded-xl bg-slate-50 px-4 text-sm font-bold text-slate-700">
-              <input type="checkbox" checked={form.isActive !== false} onChange={(event) => update('isActive', event.target.checked)} /> Active on website
-            </label>
-          </div>
-          <div className="overflow-hidden rounded-xl bg-slate-100">
-            {form.image ? <img src={form.image} alt="" className="aspect-[16/5] w-full object-cover" /> : <div className="grid aspect-[16/5] place-items-center text-slate-400"><ImagePlus size={30} /></div>}
+        <div className="grid content-start gap-3">
+          <input className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" placeholder={`${scheme.nameEn} Video`} value={draft.thumbnailLabel_en || ''} onChange={(event) => update('thumbnailLabel_en', event.target.value)} />
+          <div className="overflow-hidden rounded-lg border-2 border-tdp-yellow bg-black">
+            {draft.playlistThumbnail ? <img src={draft.playlistThumbnail} alt="" className="aspect-video w-full object-cover" /> : <div className="grid aspect-video place-items-center text-slate-400"><ImagePlus size={30} /></div>}
           </div>
         </div>
-        <button disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
-          <Save size={18} />{saving ? 'Saving...' : editing ? 'Update Banner' : 'Save Banner'}
-        </button>
-      </form>
-
-      <div>
-        <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">All Banners</p>
-        {isLoading ? (
-          <div className="rounded-xl bg-slate-50 p-5 text-sm font-bold text-slate-500">Loading banners...</div>
-        ) : banners.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {banners.map((banner) => (
-              <article key={banner.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="aspect-[16/7] bg-slate-100">
-                  <img src={banner.image || '/og-image.svg'} alt={banner.title_en || 'Super 6 banner'} className="h-full w-full object-cover" />
-                </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-black text-slate-950">{banner.title_en || 'Untitled banner'}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">Order {banner.order || '-'} - {banner.isActive !== false ? 'Active' : 'Inactive'}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-1 text-[11px] font-black ${banner.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{banner.isActive !== false ? 'ON' : 'OFF'}</span>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <button type="button" onClick={() => edit(banner)} className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700"><Edit size={15} />Edit</button>
-                    <button type="button" onClick={() => remove(banner.id)} className="inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-tdp-red"><Trash2 size={15} />Delete</button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-yellow-300 bg-yellow-50 p-6 text-center">
-            <ImagePlus className="mx-auto mb-2 text-yellow-700" />
-            <p className="font-black text-yellow-950">No Super 6 banners yet.</p>
-            <p className="mt-1 text-sm font-semibold text-yellow-800">Upload one here to replace the public page fallback.</p>
-          </div>
-        )}
       </div>
-    </section>
+      <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
+        <Save size={18} />{saving ? 'Saving...' : 'Save'}
+      </button>
+    </article>
   );
 };
 
@@ -209,6 +194,7 @@ const ManageSuper6 = () => {
     if (data.length >= 6) return toast('Six Super 6 entries already exist');
     try {
       await Promise.all(super6Schemes.slice(0, 6).map((scheme, index) => crud.create.mutateAsync({
+        schemeId: scheme.id,
         title_en: scheme.nameEn,
         title_te: scheme.nameTe,
         shortDescription_en: scheme.description,
@@ -221,6 +207,11 @@ const ManageSuper6 = () => {
         image: scheme.image,
         images: [scheme.image],
         videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
+        playlistThumbnail: scheme.poster || scheme.image,
+        thumbnailImage: scheme.poster || scheme.image,
+        videoThumbnail: scheme.poster || scheme.image,
+        thumbnailLabel_en: `${scheme.nameEn} Video`,
+        thumbnailLabel_te: `${scheme.nameTe} Video`,
         order: index + 1,
         isPublished: true,
         isActive: true
@@ -269,7 +260,7 @@ const ManageSuper6 = () => {
         </div>
       </div>
 
-      <Super6BannerManager />
+      <Super6ThumbnailManager items={data} />
 
       <form onSubmit={save} className="grid gap-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
         <div className="grid gap-4 lg:grid-cols-[1fr_260px]">

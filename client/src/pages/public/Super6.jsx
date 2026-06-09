@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, ArrowUp, BookOpen, Film, PlayCircle } from 'lucide-react';
 import PageHero from './PageHero';
-import Super6Banner from '@/components/ui/Super6Banner';
 import { useCollection } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
 import { getLangField, sanitizeHtml } from '@/utils/helpers';
@@ -10,6 +9,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 
 const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   id: scheme.id,
+  schemeId: scheme.id,
   order: index + 1,
   title_en: scheme.nameEn,
   title_te: scheme.nameTe,
@@ -18,31 +18,44 @@ const buildFallback = () => super6Schemes.slice(0, 6).map((scheme, index) => ({
   description_en: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
   description_te: [scheme.description, scheme.benefits, scheme.eligibility, scheme.steps].flat().filter(Boolean).map((item) => `<p>${item}</p>`).join(''),
   videos: scheme.videoSrc ? [{ title: `${scheme.nameEn} Video`, url: scheme.videoSrc }] : [],
+  playlistThumbnail: scheme.poster || scheme.image,
+  thumbnailLabel_en: `${scheme.nameEn} Video`,
+  thumbnailLabel_te: `${scheme.nameTe} Video`,
   isPublished: true,
   isActive: true
 }));
+
+const findAdminScheme = (items, fallback, index) => items.find((item) => (
+  item.schemeId === fallback.schemeId
+  || item.sourceId === fallback.schemeId
+  || item.id === fallback.schemeId
+  || item.title_en === fallback.title_en
+  || Number(item.order) === index + 1
+));
 
 const Super6 = () => {
   const { language } = useLanguage();
   const { data = [], isLoading } = useCollection('super6Schemes', { publishedOnly: true, activeOnly: true, orderByField: 'order', orderDirection: 'asc' });
   const schemes = useMemo(() => {
-    const adminItems = data.length ? data : buildFallback();
-    return adminItems.sort((a, b) => (a.order || 99) - (b.order || 99)).slice(0, 6);
+    const fallbackItems = buildFallback();
+    return fallbackItems.map((fallback, index) => {
+      const adminItem = findAdminScheme(data, fallback, index);
+      return adminItem ? { ...fallback, ...adminItem, videos: normalizeVideos(adminItem.videos || adminItem.videoUrls).length ? adminItem.videos || adminItem.videoUrls : fallback.videos, order: index + 1 } : fallback;
+    });
   }, [data]);
 
   return (
     <>
       <PageHero page="super6" title="Super 6 Schemes" subtitle="Flagship welfare schemes of Telugu Desam Party" />
-      <Super6Banner />
       <section className="bg-white py-12 md:py-16">
-        <div className="container-page">
+        <div className="mx-auto w-full max-w-[1560px] px-4 sm:px-6 lg:px-8">
           <div className="mb-7 max-w-3xl">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-tdp-red">Dedicated Super 6 Page</p>
             <h2 className="mt-2 text-3xl font-black text-slate-950 md:text-4xl">Six schemes, clear details, and inline videos</h2>
             <p className="mt-3 leading-7 text-slate-600">This page is managed from the Super 6 admin panel and remains completely separate from General Schemes.</p>
           </div>
           {isLoading && !data.length && <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm font-bold text-yellow-900">Loading admin Super 6 entries. Showing built-in defaults until Firebase responds.</div>}
-          <div className="grid items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
             {schemes.map((scheme, index) => <Super6Card key={scheme.id || index} scheme={scheme} index={index} language={language} />)}
           </div>
         </div>
@@ -56,6 +69,8 @@ const Super6Card = ({ scheme, index, language }) => {
   const title = getLangField(scheme, 'title', language);
   const fullDescription = getLangField(scheme, 'readMore', language) || getLangField(scheme, 'description', language);
   const videos = normalizeVideos(scheme.videos || scheme.videoUrls);
+  const playlistThumbnail = scheme.playlistThumbnail || scheme.thumbnailImage || scheme.videoThumbnail || scheme.thumbnail || scheme.image || scheme.images?.[0] || '/og-image.svg';
+  const thumbnailLabel = getLangField(scheme, 'thumbnailLabel', language) || `${title || `Super 6 Scheme ${index + 1}`} Video`;
 
   return (
     <motion.article
@@ -63,12 +78,12 @@ const Super6Card = ({ scheme, index, language }) => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.25) }}
-      className="group overflow-hidden rounded-lg border border-yellow-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.10)] transition hover:-translate-y-1 hover:border-yellow-300 hover:shadow-[0_18px_42px_rgba(245,166,35,0.22)]"
+      className="group mx-auto flex w-full max-w-[500px] flex-col gap-3 overflow-hidden rounded-2xl border-2 border-tdp-yellow bg-[#1a1a1a] p-4 shadow-[0_14px_36px_rgba(15,23,42,0.22)] transition hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(245,166,35,0.22)]"
     >
-      <div className="p-4">
-        <h3 className="line-clamp-3 text-2xl font-black leading-tight text-tdp-yellow drop-shadow-[0_1px_1px_rgba(15,23,42,0.65)]">{title || `Super 6 Scheme ${index + 1}`}</h3>
+      <div>
+        <h3 className="line-clamp-3 text-2xl font-black leading-tight text-tdp-yellow">{title || `Super 6 Scheme ${index + 1}`}</h3>
         <div className="mt-4">
-          <InlineVideoPlaylist videos={videos} cardIndex={index} />
+          <InlineVideoPlaylist videos={videos} cardIndex={index} thumbnail={playlistThumbnail} thumbnailLabel={thumbnailLabel} />
         </div>
         <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-tdp-yellow px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-tdp-navy shadow-[0_8px_22px_rgba(245,166,35,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(245,166,35,0.55)]">
           <BookOpen size={16} /> {expanded ? 'Close' : 'Read More'} {expanded ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
@@ -90,7 +105,7 @@ const Super6Card = ({ scheme, index, language }) => {
   );
 };
 
-const InlineVideoPlaylist = ({ videos, cardIndex }) => {
+const InlineVideoPlaylist = ({ videos, cardIndex, thumbnail, thumbnailLabel }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [inView, setInView] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -143,6 +158,11 @@ const InlineVideoPlaylist = ({ videos, cardIndex }) => {
     if (node?.requestFullscreen) node.requestFullscreen();
   };
 
+  const playFromThumbnail = () => {
+    const current = videoRef.current;
+    if (current) current.play().catch(() => {});
+  };
+
   if (!videos.length) {
     return (
       <div className="rounded-lg border border-yellow-300 bg-slate-950 p-3 shadow-xl">
@@ -158,7 +178,7 @@ const InlineVideoPlaylist = ({ videos, cardIndex }) => {
   }
 
   return (
-    <div ref={wrapperRef} className="rounded-lg border border-slate-900 bg-slate-950 p-3 shadow-xl">
+    <div ref={wrapperRef} className="w-full rounded-lg border border-slate-900 bg-slate-950 p-3 shadow-xl">
       <div className="mb-3 flex items-center justify-between gap-3 text-sm font-black uppercase tracking-[0.12em] text-tdp-yellow">
         <span className="inline-flex items-center gap-2"><PlayCircle size={18} /> Now Playing</span>
         <button type="button" onClick={fullscreen} className="rounded-full border border-yellow-300/40 px-3 py-1 text-[10px] text-yellow-100">Fullscreen</button>
@@ -182,16 +202,15 @@ const InlineVideoPlaylist = ({ videos, cardIndex }) => {
           />
         )}
       </div>
-      <div className="mt-3 flex gap-3 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch]">
-        {videos.map((video, index) => (
-          <button key={`${video.url}-${index}`} type="button" onClick={() => switchVideo(index)} className={`min-w-[132px] rounded-lg border p-2 text-left transition ${index === activeIndex ? 'border-tdp-yellow bg-tdp-yellow text-slate-950' : 'border-white/15 bg-white/8 text-white hover:bg-white/14'}`}>
-            <span className="grid aspect-video place-items-center rounded bg-black/40">
-              <PlayCircle size={28} className={index === activeIndex ? 'text-slate-950' : 'text-tdp-yellow'} />
-            </span>
-            <span className="mt-2 line-clamp-2 block text-xs font-black">{video.title}</span>
-          </button>
-        ))}
-      </div>
+      <button type="button" onClick={playFromThumbnail} className="group/thumbnail mt-3 block w-full text-left">
+        <span className="relative block aspect-video w-full overflow-hidden rounded-lg border-2 border-tdp-yellow bg-black">
+          <img src={thumbnail} alt={thumbnailLabel} className="h-full w-full object-cover transition duration-300 group-hover/thumbnail:scale-105" loading="lazy" />
+          <span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition duration-300 group-hover/thumbnail:bg-black/22 group-hover/thumbnail:opacity-100">
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-black/55 text-xl text-white">▶</span>
+          </span>
+        </span>
+        <span className="mt-2 block rounded-lg bg-white/8 px-3 py-2 text-sm font-black text-yellow-100">{thumbnailLabel}</span>
+      </button>
     </div>
   );
 };

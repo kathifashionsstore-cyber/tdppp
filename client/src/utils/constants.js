@@ -7,7 +7,6 @@ export const COLLECTIONS = {
   achievements: 'achievements',
   schemes: 'schemes',
   super6Schemes: 'super6Schemes',
-  super6Banners: 'super6Banners',
   festivalBanners: 'festivalBanners',
   announcements: 'announcements',
   narasaraopetSections: 'narasaraopetSections',
