@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, ArrowUp, BookOpen, Film, PlayCircle } from 'lucide-react';
 import PageHero from './PageHero';
+import Super6Banner from '@/components/ui/Super6Banner';
 import { useCollection } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
 import { getLangField, sanitizeHtml } from '@/utils/helpers';
@@ -32,6 +33,7 @@ const Super6 = () => {
   return (
     <>
       <PageHero page="super6" title="Super 6 Schemes" subtitle="Flagship welfare schemes of Telugu Desam Party" />
+      <Super6Banner />
       <section className="bg-white py-12 md:py-16">
         <div className="container-page">
           <div className="mb-7 max-w-3xl">
