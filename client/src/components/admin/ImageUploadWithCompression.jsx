@@ -6,6 +6,14 @@ import useResolvedImage from '@/hooks/useResolvedImage';
 
 const defaultAccept = 'image/jpeg,image/png,image/webp';
 
+const getUploadStageText = (stage) => {
+  if (stage === 'compressing') return 'Compressing image...';
+  if (stage === 'uploading') return 'Uploading to server...';
+  if (stage === 'done') return 'Upload complete';
+  if (stage === 'error') return 'Upload failed';
+  return 'Preparing image...';
+};
+
 const ImageUploadWithCompression = ({
   label = 'Image Upload',
   value = [],
@@ -21,8 +29,13 @@ const ImageUploadWithCompression = ({
 }) => {
   const inputRef = useRef(null);
   const previewUrlsRef = useRef([]);
+  const activeUploadRef = useRef(null);
+  const statusResetTimeoutRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [items, setItems] = useState([]);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState('');
   const urls = Array.isArray(value) ? value : value ? [value] : [];
 
   useEffect(() => {
@@ -30,19 +43,59 @@ const ImageUploadWithCompression = ({
   }, [busy, onUploadStateChange]);
 
   useEffect(() => () => {
+    activeUploadRef.current?.controller?.abort();
+    activeUploadRef.current = null;
+    clearTimeout(statusResetTimeoutRef.current);
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
+
+  const setOverallProgress = (stage, progress) => {
+    setUploadStage(stage);
+    setUploadProgress(Math.min(100, Math.max(0, Math.round(progress))));
+  };
+
+  const cancelUpload = () => {
+    const activeUpload = activeUploadRef.current;
+    if (!activeUpload) return;
+    activeUpload.controller.abort();
+    toast.dismiss(activeUpload.toastId);
+    activeUploadRef.current = null;
+    setBusy(false);
+    setUploadStage('');
+    setUploadProgress(0);
+    setUploadError('');
+    setItems((state) => state.map((item) => (
+      item.status === 'compressing' || item.status === 'uploading'
+        ? { ...item, status: 'error', error: 'Canceled', progress: 0 }
+        : item
+    )));
+    if (inputRef.current) inputRef.current.value = '';
+  };
 
   const processFiles = async (files) => {
     const selected = Array.from(files || []);
     if (!selected.length || busy) return;
+    clearTimeout(statusResetTimeoutRef.current);
+    const controller = new AbortController();
+    const operation = { id: `${Date.now()}-${Math.random()}`, controller, toastId: null, hardTimedOut: false };
+    activeUploadRef.current = operation;
+    const isCurrentOperation = () => activeUploadRef.current?.id === operation.id;
+    const hardTimeout = setTimeout(() => {
+      operation.hardTimedOut = true;
+      controller.abort();
+    }, 60_000);
+
     setBusy(true);
+    setUploadError('');
+    setOverallProgress('compressing', 5);
     const toastId = toast.loading(`Compressing ${selected.length} image${selected.length > 1 ? 's' : ''}...`);
+    operation.toastId = toastId;
     const uploadedUrls = [];
     const processed = [];
 
     try {
       for (let index = 0; index < selected.length; index += 1) {
+        if (controller.signal.aborted) throw new Error('Upload canceled');
         const file = selected[index];
         const rowId = `${file.name}-${file.lastModified}-${index}`;
         if (!file.type.startsWith('image/')) throw new Error(`${file.name} is not a valid image.`);
@@ -58,29 +111,41 @@ const ImageUploadWithCompression = ({
 
         const compressed = await compressImageFile(file, {
           maxSizeKB,
+          signal: controller.signal,
           onProgress: ({ progress }) => {
-            setItems((state) => state.map((item) => item.id === rowId ? { ...item, progress, status: 'compressing' } : item));
+            if (!isCurrentOperation()) return;
+            const overallProgress = 5 + (progress * 0.3);
+            setOverallProgress('compressing', overallProgress);
+            setItems((state) => state.map((item) => item.id === rowId ? { ...item, progress: overallProgress, status: 'compressing' } : item));
           }
         });
+        if (controller.signal.aborted) throw new Error('Upload canceled');
         const previewUrl = URL.createObjectURL(compressed.file);
         previewUrlsRef.current.push(previewUrl);
+        setOverallProgress('uploading', 40);
 
         setItems((state) => state.map((item) => item.id === rowId ? {
           ...item,
           status: 'uploading',
           compressedSize: compressed.compressedSize,
           format: compressed.format,
+          warning: compressed.compressionWarning,
           previewUrl,
-          progress: 96
+          progress: 40
         } : item));
 
         onUpload?.({ ...compressed, previewUrl });
         const uploaded = await uploadCompressedImage(compressed.file, {
           folder: storageFolder,
+          signal: controller.signal,
           onProgress: (progress) => {
-            setItems((state) => state.map((item) => item.id === rowId ? { ...item, progress, status: 'uploading' } : item));
+            if (!isCurrentOperation()) return;
+            const overallProgress = 40 + (progress * 0.5);
+            setOverallProgress('uploading', overallProgress);
+            setItems((state) => state.map((item) => item.id === rowId ? { ...item, progress: overallProgress, status: 'uploading' } : item));
           }
         });
+        if (controller.signal.aborted) throw new Error('Upload canceled');
         const uploadedUrl = uploaded.url || uploaded.downloadURL || uploaded.displayUrl || '';
 
         uploadedUrls.push(uploadedUrl);
@@ -95,16 +160,39 @@ const ImageUploadWithCompression = ({
         } : item));
       }
 
+      setOverallProgress('done', 100);
       const nextValue = multiple ? [...urls, ...uploadedUrls] : uploadedUrls[0] || '';
       onChange?.(nextValue);
       onUploadComplete?.(multiple ? processed : processed[0]);
-      toast.success(`${selected.length} image${selected.length > 1 ? 's' : ''} ready under ${maxSizeKB}KB`, { id: toastId });
+      const hasCompressionWarning = processed.some((item) => item.compressionWarning);
+      toast.success(
+        hasCompressionWarning
+          ? `${selected.length} image${selected.length > 1 ? 's' : ''} uploaded with compression warning`
+          : `${selected.length} image${selected.length > 1 ? 's' : ''} ready near ${maxSizeKB}KB`,
+        { id: toastId }
+      );
       if (inputRef.current) inputRef.current.value = '';
     } catch (error) {
-      toast.error(error.message || 'Image compression/upload failed', { id: toastId });
-      setItems((state) => state.map((item) => item.status === 'compressing' || item.status === 'uploading' ? { ...item, status: 'error', error: error.message } : item));
+      if (!isCurrentOperation()) return;
+      const message = operation.hardTimedOut
+        ? 'Upload timed out. Please try again with a smaller image.'
+        : error.message || 'Image compression/upload failed';
+      setUploadError(message);
+      setOverallProgress('error', 0);
+      toast.error(message, { id: toastId });
+      setItems((state) => state.map((item) => item.status === 'compressing' || item.status === 'uploading' ? { ...item, status: 'error', error: message } : item));
     } finally {
-      setBusy(false);
+      clearTimeout(hardTimeout);
+      if (isCurrentOperation()) {
+        activeUploadRef.current = null;
+        setBusy(false);
+        statusResetTimeoutRef.current = setTimeout(() => {
+          if (!activeUploadRef.current) {
+            setUploadProgress(0);
+            setUploadStage('');
+          }
+        }, 2000);
+      }
     }
   };
 
@@ -117,7 +205,7 @@ const ImageUploadWithCompression = ({
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="text-xs font-bold text-slate-400">Max {maxSizeKB}KB - WebP</p>
+        <p className="text-xs font-bold text-slate-400">Target {maxSizeKB}KB - WebP</p>
       </div>
 
       <button
@@ -129,10 +217,33 @@ const ImageUploadWithCompression = ({
         className="flex min-h-36 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-yellow-300 bg-yellow-50 p-4 text-center text-sm font-semibold text-yellow-900 transition hover:border-tdp-red hover:bg-yellow-100 disabled:pointer-events-none disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500"
       >
         {busy ? <Loader2 className="mb-2 animate-spin" /> : <ImagePlus className="mb-2" />}
-        {busy ? 'Compressing image before upload...' : 'Click or drag images to compress and upload'}
+        {busy ? getUploadStageText(uploadStage) : 'Click or drag images to compress and upload'}
         <span className="mt-1 text-xs text-yellow-800/75">Accepted: JPG, PNG, WebP. Aspect hint: {aspectRatio}</span>
       </button>
       <input ref={inputRef} type="file" accept={accept} multiple={multiple} hidden disabled={busy} onChange={(event) => processFiles(event.target.files)} />
+
+      {busy && (
+        <div className="mt-3 rounded-xl border border-yellow-300 bg-slate-950 p-3 text-sm text-yellow-100">
+          <div className="h-2 overflow-hidden rounded-full bg-white/15">
+            <div className="h-full rounded-full bg-tdp-yellow transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="font-black">{getUploadStageText(uploadStage)}</p>
+            <button type="button" onClick={cancelUpload} className="inline-flex items-center gap-1 rounded-lg border border-white/20 px-3 py-1 text-xs font-black text-white transition hover:border-white/45" aria-label="Cancel upload">
+              <X size={13} /> Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+          <span>{uploadError}</span>
+          <button type="button" onClick={() => setUploadError('')} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-black text-red-700 transition hover:bg-red-100">
+            <X size={13} /> Dismiss
+          </button>
+        </div>
+      )}
 
       {!!items.length && (
         <div className="mt-3 grid gap-3">
@@ -153,8 +264,9 @@ const ImageUploadWithCompression = ({
                 </div>
                 <p className={`mt-1 inline-flex items-center gap-1 text-xs font-black ${item.status === 'ready' ? 'text-green-700' : item.status === 'error' ? 'text-red-700' : 'text-yellow-800'}`}>
                   {item.status === 'ready' ? <CheckCircle2 size={13} /> : item.status === 'error' ? <X size={13} /> : <RefreshCw size={13} className="animate-spin" />}
-                  {item.status === 'ready' ? `Image ready - ${formatFileSize(item.compressedSize)}` : item.status === 'error' ? item.error || 'Error' : 'Compressing/uploading...'}
+                  {item.status === 'ready' ? `Image ready - ${formatFileSize(item.compressedSize)}` : item.status === 'error' ? item.error || 'Error' : getUploadStageText(item.status)}
                 </p>
+                {item.warning && <p className="mt-1 text-xs font-bold text-yellow-700">{item.warning}</p>}
               </div>
               {item.status === 'ready' && <CheckCircle2 className="text-green-600" />}
             </div>

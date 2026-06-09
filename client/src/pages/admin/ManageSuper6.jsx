@@ -9,6 +9,16 @@ import { super6Schemes } from '@/data/super6Data';
 import { translatePayloadFields } from '@/services/translationService';
 import useResolvedImage from '@/hooks/useResolvedImage';
 
+const SAVE_TIMEOUT_MS = 60_000;
+
+const withSaveTimeout = (promise, message) => {
+  let timeoutId = null;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), SAVE_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+};
+
 const emptyForm = () => ({
   title_en: '',
   title_te: '',
@@ -97,9 +107,11 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
   const [draft, setDraft] = useState(() => thumbnailDraft(scheme, item));
   const [imageUploading, setImageUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     setDraft(thumbnailDraft(scheme, item));
+    setSaveError('');
   }, [item, scheme]);
 
   const update = (key, value) => setDraft((state) => ({ ...state, [key]: value }));
@@ -132,8 +144,9 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
     const thumbnailUrl = draft.thumbnailUrl || draft.playlistThumbnail;
     if (!thumbnailUrl) return toast.error(`Upload a thumbnail for ${scheme.nameEn}`);
     setSaving(true);
+    setSaveError('');
     try {
-      const payload = await translatePayloadFields({
+      const payload = await withSaveTimeout(translatePayloadFields({
         ...(item || defaultSchemePayload(scheme, index)),
         schemeId: scheme.id,
         order: index + 1,
@@ -145,12 +158,14 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
         thumbnailLabel_en: draft.thumbnailLabel_en || `${scheme.nameEn} Video`,
         isPublished: true,
         isActive: true
-      }, ['thumbnailLabel']);
-      if (item?.id) await crud.update.mutateAsync({ id: item.id, data: payload });
-      else await crud.create.mutateAsync(payload);
+      }, ['thumbnailLabel']), `Saving ${scheme.nameEn} thumbnail timed out. Please try again.`);
+      if (item?.id) await withSaveTimeout(crud.update.mutateAsync({ id: item.id, data: payload }), `Saving ${scheme.nameEn} thumbnail timed out. Please try again.`);
+      else await withSaveTimeout(crud.create.mutateAsync(payload), `Saving ${scheme.nameEn} thumbnail timed out. Please try again.`);
       toast.success(`${scheme.nameEn} thumbnail saved`);
     } catch (error) {
-      toast.error(error.message || 'Unable to save thumbnail');
+      const message = error.message || 'Unable to save thumbnail';
+      setSaveError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -179,9 +194,12 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
           <ThumbnailPreview source={draft.previewUrl || draft.thumbnailUrl || draft.playlistThumbnail} path={draft.thumbnailPath} isUploading={imageUploading} />
         </div>
       </div>
-      <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
-        <Save size={18} />{saving ? 'Saving...' : 'Save'}
-      </button>
+      <div className="grid gap-2">
+        <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
+          <Save size={18} />{saving ? 'Saving...' : 'Save'}
+        </button>
+        {saveError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{saveError}</p>}
+      </div>
     </article>
   );
 };
@@ -194,6 +212,7 @@ const ManageSuper6 = () => {
   const [videoDraft, setVideoDraft] = useState({ title: '', url: '' });
   const [imageUploading, setImageUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const seededCount = useMemo(() => data.length, [data.length]);
   const update = (key, value) => setForm((state) => ({ ...state, [key]: value }));
@@ -202,12 +221,14 @@ const ManageSuper6 = () => {
     setEditing(item.id);
     setForm({ ...emptyForm(), ...item, videos: normalizeVideos(item.videos || item.videoUrls || []) });
     setVideoDraft({ title: '', url: '' });
+    setSaveError('');
   };
 
   const reset = () => {
     setEditing(null);
     setForm(emptyForm());
     setVideoDraft({ title: '', url: '' });
+    setSaveError('');
   };
 
   const addVideo = () => {
@@ -267,21 +288,24 @@ const ManageSuper6 = () => {
     if (imageUploading) return toast.error('Please wait until image upload finishes');
     if (!form.title_en && !form.image && !form.thumbnail) return toast.error('Title or thumbnail is required');
     setSaving(true);
+    setSaveError('');
     try {
       const image = form.image || form.thumbnail || form.images?.[0] || '';
-      const payload = await translatePayloadFields({
+      const payload = await withSaveTimeout(translatePayloadFields({
         ...form,
         image,
         thumbnail: form.thumbnail || image,
         images: form.images?.length ? form.images : image ? [image] : [],
         videos: normalizeVideos(form.videos).filter((video) => video.url && !String(video.url).startsWith('blob:')).map(({ title, url }) => ({ title, url }))
-      });
-      if (editing) await crud.update.mutateAsync({ id: editing, data: payload });
-      else await crud.create.mutateAsync(payload);
+      }), 'Saving Super 6 scheme timed out. Please try again.');
+      if (editing) await withSaveTimeout(crud.update.mutateAsync({ id: editing, data: payload }), 'Saving Super 6 scheme timed out. Please try again.');
+      else await withSaveTimeout(crud.create.mutateAsync(payload), 'Saving Super 6 scheme timed out. Please try again.');
       toast.success('Super 6 scheme saved');
       reset();
     } catch (error) {
-      toast.error(error.message || 'Save failed');
+      const message = error.message || 'Save failed';
+      setSaveError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -367,6 +391,7 @@ const ManageSuper6 = () => {
           <button disabled={imageUploading || saving} className="inline-flex items-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red transition hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"><Save size={18} />{saving ? 'Saving...' : editing ? 'Update' : 'Save'}</button>
           <button type="button" onClick={reset} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-3 font-bold text-slate-700"><XCircle size={18} />Cancel</button>
         </div>
+        {saveError && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{saveError}</p>}
       </form>
 
       {isLoading ? <div className="rounded-2xl bg-white p-6 shadow-sm">Loading...</div> : <ContentTable items={data} onEdit={edit} onDelete={(id) => crud.remove.mutate(id)} language="en" />}

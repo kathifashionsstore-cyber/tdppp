@@ -6,6 +6,10 @@ const IMGBB_API_KEY = import.meta.env.VITE_IMGBB_API_KEY || '202b1fcbad15a90cccb
 const IMGBB_URL = 'https://api.imgbb.com/1/upload';
 export const MAX_IMAGE_UPLOAD_BYTES = 300 * 1024;
 export const MAX_IMAGE_UPLOAD_KB = 300;
+const COMPRESSION_TIMEOUT_MS = 15_000;
+const FIREBASE_UPLOAD_TIMEOUT_MS = 30_000;
+const IMGBB_UPLOAD_TIMEOUT_MS = 20_000;
+const FALLBACK_UPLOAD_LIMIT_BYTES = 8 * 1024 * 1024;
 
 const safeStorageSegment = (value = 'image') => String(value)
   .trim()
@@ -25,98 +29,211 @@ export const formatFileSize = (bytes = 0) => {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
-export const compressImageFile = async (file, { maxSizeKB = MAX_IMAGE_UPLOAD_KB, onProgress } = {}) => {
-  if (!file?.type?.startsWith('image/')) throw new Error('Please select a valid image file.');
+const createCanceledError = (message = 'Upload canceled') => new Error(message);
 
-  const maxSizeMB = maxSizeKB / 1024;
-  let quality = 0.82;
-  let compressed = null;
-  let pass = 0;
-
-  while (pass < 6) {
-    pass += 1;
-    onProgress?.({ phase: 'compressing', pass, quality, progress: Math.min(92, pass * 14) });
-    compressed = await imageCompression(file, {
-      maxSizeMB,
-      maxWidthOrHeight: 1920,
-      initialQuality: quality,
-      fileType: 'image/webp',
-      useWebWorker: true,
-      alwaysKeepResolution: false
-    });
-    if (compressed.size <= maxSizeKB * 1024) break;
-    quality = Math.max(0.42, quality - 0.1);
-  }
-
-  if (compressed.size > maxSizeKB * 1024) {
-    throw new Error(`Image too large after compression. Maximum allowed size is ${maxSizeKB}KB.`);
-  }
-
-  const safeName = file.name.replace(/\.[^/.]+$/, '.webp');
-  const webpFile = new File([compressed], safeName, { type: compressed.type || 'image/webp', lastModified: Date.now() });
-  return {
-    file: webpFile,
-    originalSize: file.size,
-    compressedSize: webpFile.size,
-    format: webpFile.type.includes('webp') ? 'WebP' : webpFile.type || 'Image',
-    originalName: file.name,
-    name: safeName
-  };
+const reportProgress = (onProgress, value) => {
+  if (!onProgress) return;
+  onProgress(value);
 };
 
-export const uploadCompressedImageToImgBB = async (compressedFile, onProgress) => {
-  if (compressedFile.size > MAX_IMAGE_UPLOAD_BYTES) {
-    throw new Error('Image too large. Maximum allowed size is 300KB. Please compress before uploading.');
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(compressedFile);
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      const formData = new FormData();
-      formData.append('key', IMGBB_API_KEY);
-      formData.append('image', base64);
-      formData.append('name', compressedFile.name.replace(/\.[^/.]+$/, ''));
-      const xhr = new XMLHttpRequest();
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
-      });
-      xhr.onload = () => {
-        try {
-          const response = JSON.parse(xhr.responseText);
-          if (response.success) resolve({
-            url: response.data.display_url || response.data.url,
-            originalUrl: response.data.url,
-            displayUrl: response.data.display_url,
-            deleteUrl: response.data.delete_url,
-            id: response.data.id,
-            storageProvider: 'imgbb'
-          });
-          else reject(new Error(response.error?.message || 'ImgBB upload failed'));
-        } catch (error) {
-          reject(error);
-        }
-      };
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.open('POST', IMGBB_URL);
-      xhr.send(formData);
-    };
-    reader.onerror = () => reject(new Error('File read error'));
+const withCancelableTimeout = (promise, { timeoutMs, message, signal }) => {
+  if (signal?.aborted) return Promise.reject(createCanceledError());
+
+  let timeoutId = null;
+  let abortHandler = null;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  const cancel = new Promise((_, reject) => {
+    abortHandler = () => reject(createCanceledError());
+    signal?.addEventListener('abort', abortHandler, { once: true });
+  });
+
+  return Promise.race([promise, timeout, cancel]).finally(() => {
+    clearTimeout(timeoutId);
+    if (abortHandler) signal?.removeEventListener('abort', abortHandler);
   });
 };
 
-export const uploadCompressedImageToFirebaseStorage = async (compressedFile, { folder = 'uploads/images', onProgress } = {}) => {
-  if (compressedFile.size > MAX_IMAGE_UPLOAD_BYTES) {
-    throw new Error('Image too large. Maximum allowed size is 300KB. Please compress before uploading.');
+const toUploadFile = (blob, sourceFile, { fallback = false } = {}) => {
+  if (fallback && sourceFile instanceof File) return sourceFile;
+
+  const baseName = sourceFile.name.replace(/\.[^/.]+$/, '') || 'image';
+  const safeName = fallback ? sourceFile.name : `${baseName}.webp`;
+  return new File([blob], safeName, {
+    type: blob.type || sourceFile.type || 'image/webp',
+    lastModified: Date.now()
+  });
+};
+
+const assertUploadableSize = (file) => {
+  if (file.size > FALLBACK_UPLOAD_LIMIT_BYTES) {
+    throw new Error(`Image is too large to upload (${formatFileSize(file.size)}). Please choose an image under ${formatFileSize(FALLBACK_UPLOAD_LIMIT_BYTES)}.`);
   }
+};
+
+export const compressImageFile = async (file, { maxSizeKB = MAX_IMAGE_UPLOAD_KB, onProgress, signal } = {}) => {
+  if (!file?.type?.startsWith('image/')) throw new Error('Please select a valid image file.');
+  if (signal?.aborted) throw createCanceledError();
+
+  const maxSizeMB = maxSizeKB / 1024;
+  const compressionController = new AbortController();
+  let compressionTimeoutId = null;
+  const abortCompression = () => compressionController.abort();
+  signal?.addEventListener('abort', abortCompression, { once: true });
+
+  try {
+    reportProgress(onProgress, { phase: 'compressing', progress: 10 });
+    const compressionPromise = imageCompression(file, {
+      maxSizeMB,
+      maxWidthOrHeight: 1280,
+      useWebWorker: true,
+      fileType: 'image/webp',
+      initialQuality: 0.7,
+      alwaysKeepResolution: false,
+      signal: compressionController.signal,
+      onProgress: (progress) => {
+        reportProgress(onProgress, {
+          phase: 'compressing',
+          progress: Math.min(92, Math.max(10, Math.round(progress)))
+        });
+      }
+    });
+    const timeoutPromise = new Promise((_, reject) => {
+      compressionTimeoutId = setTimeout(() => {
+        compressionController.abort();
+        reject(new Error('Compression timeout after 15s'));
+      }, COMPRESSION_TIMEOUT_MS);
+    });
+    const compressed = await Promise.race([compressionPromise, timeoutPromise]);
+    const webpFile = toUploadFile(compressed, file);
+    const warning = webpFile.size > maxSizeKB * 1024
+      ? `Compressed image is ${formatFileSize(webpFile.size)}, above the ${maxSizeKB}KB target.`
+      : '';
+
+    reportProgress(onProgress, { phase: 'compressing', progress: 95 });
+    return {
+      file: webpFile,
+      originalSize: file.size,
+      compressedSize: webpFile.size,
+      format: webpFile.type.includes('webp') ? 'WebP' : webpFile.type || 'Image',
+      originalName: file.name,
+      name: webpFile.name,
+      compressionWarning: warning
+    };
+  } catch (error) {
+    if (signal?.aborted) throw createCanceledError();
+    console.warn('Compression failed or timed out, using original image:', error.message);
+    const originalFile = toUploadFile(file, file, { fallback: true });
+    assertUploadableSize(originalFile);
+    return {
+      file: originalFile,
+      originalSize: file.size,
+      compressedSize: originalFile.size,
+      format: originalFile.type || 'Image',
+      originalName: file.name,
+      name: originalFile.name,
+      compressionWarning: 'Compression timed out, so the original image was uploaded.'
+    };
+  } finally {
+    clearTimeout(compressionTimeoutId);
+    signal?.removeEventListener('abort', abortCompression);
+  }
+};
+
+export const uploadToImgBB = async (file, { onProgress, signal, timeoutMs = IMGBB_UPLOAD_TIMEOUT_MS } = {}) => {
+  assertUploadableSize(file);
+  if (signal?.aborted) throw createCanceledError();
+
+  const controller = new AbortController();
+  const abortUpload = () => controller.abort();
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  signal?.addEventListener('abort', abortUpload, { once: true });
+
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+
+  try {
+    reportProgress(onProgress, 15);
+    const response = await fetch(`${IMGBB_URL}?key=${IMGBB_API_KEY}`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    });
+    reportProgress(onProgress, 85);
+
+    if (!response.ok) throw new Error(`ImgBB HTTP error: ${response.status}`);
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error?.message || `ImgBB upload failed: ${JSON.stringify(data)}`);
+
+    reportProgress(onProgress, 100);
+    return {
+      url: data.data.display_url || data.data.url,
+      originalUrl: data.data.url,
+      displayUrl: data.data.display_url,
+      deleteUrl: data.data.delete_url,
+      id: data.data.id,
+      storageProvider: 'imgbb'
+    };
+  } catch (error) {
+    if (signal?.aborted) throw createCanceledError();
+    if (timedOut || error.name === 'AbortError') throw new Error('ImgBB upload timeout after 20s');
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', abortUpload);
+  }
+};
+
+export const uploadCompressedImageToImgBB = async (compressedFile, onProgress, options = {}) => uploadToImgBB(compressedFile, {
+  ...options,
+  onProgress
+});
+
+export const uploadCompressedImageToFirebaseStorage = async (compressedFile, {
+  folder = 'uploads/images',
+  onProgress,
+  signal,
+  timeoutMs = FIREBASE_UPLOAD_TIMEOUT_MS
+} = {}) => {
+  assertUploadableSize(compressedFile);
+  if (signal?.aborted) throw createCanceledError();
+  const startedAt = Date.now();
 
   const cleanFolder = safeStorageFolder(folder);
   const cleanName = safeStorageSegment(compressedFile.name);
-  const fullPath = `${cleanFolder}/${Date.now()}-${cleanName}.webp`;
+  const sourceExtension = compressedFile.name.match(/\.(jpe?g|png|webp)$/i)?.[1]?.toLowerCase();
+  const extension = compressedFile.type?.includes('webp') ? 'webp' : sourceExtension || 'webp';
+  const fullPath = `${cleanFolder}/${Date.now()}-${cleanName}.${extension}`;
   const targetRef = storageRef(storage, fullPath);
 
   const snapshot = await new Promise((resolve, reject) => {
-    const uploadTask = uploadBytesResumable(targetRef, compressedFile, {
+    let settled = false;
+    let uploadTask = null;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abortUpload);
+      callback(value);
+    };
+    const abortUpload = () => {
+      uploadTask?.cancel();
+      finish(reject, createCanceledError());
+    };
+    const timeoutId = setTimeout(() => {
+      uploadTask?.cancel();
+      finish(reject, new Error('Upload timeout after 30s'));
+    }, timeoutMs);
+
+    signal?.addEventListener('abort', abortUpload, { once: true });
+    uploadTask = uploadBytesResumable(targetRef, compressedFile, {
       contentType: compressedFile.type || 'image/webp',
       customMetadata: {
         originalName: compressedFile.name
@@ -130,12 +247,18 @@ export const uploadCompressedImageToFirebaseStorage = async (compressedFile, { f
           onProgress(Math.round((state.bytesTransferred / state.totalBytes) * 100));
         }
       },
-      reject,
-      () => resolve(uploadTask.snapshot)
+      (error) => finish(reject, error),
+      () => finish(resolve, uploadTask.snapshot)
     );
   });
 
-  const downloadURL = await getDownloadURL(snapshot.ref);
+  const remainingTimeoutMs = timeoutMs - (Date.now() - startedAt);
+  if (remainingTimeoutMs <= 0) throw new Error('Upload timeout after 30s');
+  const downloadURL = await withCancelableTimeout(getDownloadURL(snapshot.ref), {
+    timeoutMs: remainingTimeoutMs,
+    message: 'Upload timeout after 30s',
+    signal
+  });
   return {
     url: downloadURL,
     downloadURL,
@@ -145,21 +268,30 @@ export const uploadCompressedImageToFirebaseStorage = async (compressedFile, { f
   };
 };
 
-export const uploadCompressedImage = async (compressedFile, { folder, onProgress, fallbackToImgBB = true } = {}) => {
+export const uploadCompressedImage = async (compressedFile, { folder, onProgress, signal, fallbackToImgBB = true } = {}) => {
   try {
-    return await uploadCompressedImageToFirebaseStorage(compressedFile, { folder, onProgress });
+    return await uploadCompressedImageToFirebaseStorage(compressedFile, { folder, onProgress, signal });
   } catch (error) {
+    if (signal?.aborted) throw createCanceledError();
     if (!fallbackToImgBB) throw error;
-    const fallback = await uploadCompressedImageToImgBB(compressedFile, onProgress);
-    return {
-      ...fallback,
-      firebaseError: error.message || 'Firebase Storage upload failed'
-    };
+    console.warn('Firebase upload failed, trying ImgBB fallback:', error.message);
+    try {
+      const fallback = await uploadCompressedImageToImgBB(compressedFile, onProgress, { signal });
+      return {
+        ...fallback,
+        firebaseError: error.message || 'Firebase Storage upload failed'
+      };
+    } catch (fallbackError) {
+      if (signal?.aborted) throw createCanceledError();
+      throw new Error(`All upload methods failed. ${fallbackError.message || 'Check internet connection.'}`);
+    }
   }
 };
 
 export const uploadImageToImgBB = async (file, onProgress) => {
-  const compressed = await compressImageFile(file, { onProgress });
+  const compressed = await compressImageFile(file, {
+    onProgress: ({ progress }) => onProgress?.(progress)
+  });
   const uploaded = await uploadCompressedImageToImgBB(compressed.file, onProgress);
   return { ...uploaded, compression: compressed };
 };
