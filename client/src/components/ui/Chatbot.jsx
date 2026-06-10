@@ -27,18 +27,18 @@ const Chatbot = () => {
   };
 
   return (
-    <div className="fixed bottom-52 right-4 z-[55] md:bottom-40">
+    <div className="floating-chatbot fixed right-4 z-[55] md:bottom-40">
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ y: 34, opacity: 0 }}
+            initial={{ y: 28, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 22, opacity: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className={`fixed z-[70] flex flex-col overflow-hidden bg-white shadow-2xl ${
+            exit={{ y: 24, opacity: 0, transition: { duration: 0.2 } }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className={`chat-window-mobile z-[70] flex flex-col overflow-hidden bg-white shadow-2xl ${
               minimized
-                ? 'inset-x-3 bottom-24 top-auto rounded-lg border border-yellow-200 md:absolute md:inset-auto md:bottom-16 md:right-0 md:w-[360px]'
-                : 'inset-0 h-[100dvh] md:absolute md:inset-auto md:bottom-16 md:right-0 md:h-[480px] md:w-[360px] md:rounded-lg md:border md:border-yellow-200'
+                ? 'minimized rounded-lg border border-yellow-200 md:absolute md:inset-auto md:bottom-16 md:right-0 md:w-[360px]'
+                : 'rounded-lg border border-yellow-200 md:absolute md:inset-auto md:bottom-16 md:right-0 md:h-[500px] md:w-[380px]'
             }`}
           >
             <ChatHeader minimized={minimized} onMinimize={() => setMinimized((value) => !value)} onClose={close} />
@@ -86,8 +86,9 @@ const Chatbot = () => {
           className="group relative inline-flex items-center gap-2"
           aria-label="Open Narasaraopet assistant chat"
         >
-          <span className="chatbot-pulse relative grid h-[52px] w-[52px] place-items-center rounded-full bg-tdp-yellow text-tdp-navy shadow-[0_12px_32px_rgba(245,166,35,0.42)] md:h-14 md:w-14">
-            <BicycleIcon size={38} color="#1a1a2e" opacity={1} />
+          <span className="chatbot-pulse relative grid h-12 w-12 place-items-center rounded-full border-2 border-tdp-yellow bg-[#0a0a2e] text-tdp-yellow shadow-[0_12px_32px_rgba(10,10,46,0.38)] md:h-14 md:w-14">
+            <BicycleIcon size={36} color="#FFD700" opacity={1} className="md:h-10 md:w-10" />
+            <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-white bg-tdp-red px-1 text-[10px] font-black leading-none text-white">1</span>
           </span>
           <span className="hidden rounded-full bg-white px-3 py-2 text-sm font-black text-slate-900 shadow-lg ring-1 ring-yellow-200 md:inline">Chat</span>
         </button>
@@ -134,7 +135,7 @@ const TypingIndicator = () => (
 const ChatMessage = ({ message }) => {
   const isUser = message.role === 'user';
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <motion.div initial={{ opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.18 }} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`flex max-w-[88%] gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
         {!isUser && <BotAvatar />}
         <div className={`rounded-2xl p-3 text-sm leading-6 ${isUser ? 'rounded-br-sm bg-slate-900 font-semibold text-white' : 'rounded-bl-sm border border-gray-200 bg-white text-gray-800 shadow-sm'}`}>
@@ -143,7 +144,7 @@ const ChatMessage = ({ message }) => {
           <time className={`mt-2 block text-[10px] font-bold ${isUser ? 'text-white/60' : 'text-slate-400'}`}>{formatTime(message.timestamp)}</time>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

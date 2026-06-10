@@ -2,6 +2,7 @@ export const COLLECTIONS = {
   siteConfig: 'siteConfig',
   heroSections: 'heroSections',
   dailyWork: 'dailyWork',
+  dailySchedules: 'dailySchedules',
   news: 'news',
   gallery: 'gallery',
   achievements: 'achievements',

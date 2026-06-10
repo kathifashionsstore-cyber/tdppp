@@ -18,8 +18,6 @@ const MlaHero = ({ slides = [] }) => {
   }, [slides]);
   const [index, setIndex] = useState(0);
   const [ready, setReady] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const sectionRef = useRef(null);
   const touchStart = useRef(null);
   const touchCurrent = useRef(null);
 
@@ -31,38 +29,6 @@ const MlaHero = ({ slides = [] }) => {
     const frame = window.requestAnimationFrame(() => setReady(true));
     return () => window.cancelAnimationFrame(frame);
   }, []);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setPrefersReducedMotion(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-
-  useEffect(() => {
-    if (prefersReducedMotion) return undefined;
-    const node = sectionRef.current;
-    if (!node) return undefined;
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      const rect = node.getBoundingClientRect();
-      const offset = Math.max(-12, Math.min(18, rect.top * -0.04));
-      node.style.setProperty('--hero-parallax-y', `${offset}px`);
-    };
-    const schedule = () => {
-      if (!frame) frame = window.requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule, { passive: true });
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-    };
-  }, [prefersReducedMotion]);
 
   useEffect(() => {
     if (activeSlides.length <= 1) return undefined;
@@ -94,10 +60,10 @@ const MlaHero = ({ slides = [] }) => {
   };
 
   return (
-    <section ref={sectionRef} className="relative h-[45vh] overflow-hidden bg-slate-950 md:h-[55vh] lg:h-[70vh]" style={{ touchAction: 'pan-y' }}>
+    <section className="relative h-[42vh] overflow-hidden bg-slate-950 md:h-[55vh] lg:h-[70vh]" style={{ touchAction: 'pan-y' }}>
       <div className="absolute inset-0" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
         {activeSlides.map((slide, slideIndex) => (
-          <div key={slide.id || slide.image || slideIndex} className={`hero-slide-frame absolute inset-0 ${ready && slideIndex === index ? 'is-active' : ''}`} aria-hidden={slideIndex !== index}>
+          <div key={slide.id || slide.image || slideIndex} className={`hero-slide-frame hero-effect-${(slideIndex % 5) + 1} absolute inset-0 ${ready && slideIndex === index ? 'is-active' : ''}`} aria-hidden={slideIndex !== index}>
             <picture className="block h-full w-full">
               <source media="(max-width: 640px)" srcSet={slide.imageMobile || slide.image || DEFAULT_HERO_IMAGE} />
               <source media="(min-width: 641px)" srcSet={slide.imageDesktop || slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE} />
@@ -105,7 +71,7 @@ const MlaHero = ({ slides = [] }) => {
                 src={slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE}
                 alt={getLangField(slide, 'alt', language) || getLangField(slide, 'title', language) || slide.label || 'Narasaraopet TDP hero slide'}
                 loading={slideIndex === 0 ? 'eager' : 'lazy'}
-                fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
+                fetchpriority={slideIndex === 0 ? 'high' : 'auto'}
                 decoding="async"
                 width="1600"
                 height="900"

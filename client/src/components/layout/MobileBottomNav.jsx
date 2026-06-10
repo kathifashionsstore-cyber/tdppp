@@ -109,7 +109,7 @@ const Tab = ({ icon: Icon, label, active, badge, onClick }) => (
 );
 
 const BicycleSvg = () => (
-  <svg className="bicycle-svg" width="42" height="28" viewBox="0 0 72 44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <svg className="bicycle-svg" width="36" height="22" viewBox="0 0 72 44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <g style={{ transformOrigin: '13px 30px' }}>
       <circle cx="13" cy="30" r="12" fill="none" stroke="white" strokeWidth="2.5" />
       <g className="rear-spokes" style={{ transformOrigin: '13px 30px' }}>
