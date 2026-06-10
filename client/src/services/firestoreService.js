@@ -21,7 +21,7 @@ import { db } from './firebase';
 const stamp = (data, isNew = false) => ({
   ...data,
   updatedAt: serverTimestamp(),
-  ...(isNew ? { createdAt: serverTimestamp() } : {})
+  ...(isNew ? { createdAt: data.createdAt || serverTimestamp() } : {})
 });
 
 export const getDocument = async (collectionName, id) => {
