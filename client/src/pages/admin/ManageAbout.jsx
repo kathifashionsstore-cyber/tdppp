@@ -5,13 +5,15 @@ import ImageUploader from '@/components/admin/ImageUploader';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import { useCrud, useDoc } from '@/hooks/useFirestore';
 import { translatePayloadFields } from '@/services/translationService';
+import { toImgBBUploadMeta } from '@/utils/imageUploadMeta';
 
 const empty = {
   bio_en: '',
   bio_te: '',
   education: 'MS Orthopaedics, NTR University of Health Sciences, 1992',
   victory: '103,167 votes, margin of 19,705 votes',
-  image: '/mla/aravinda-babu.jpg'
+  image: '/mla/aravinda-babu.jpg',
+  imageUpload: null
 };
 
 const ManageAbout = () => {
@@ -57,7 +59,15 @@ const ManageAbout = () => {
             <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" value={form.education} onChange={(event) => update('education', event.target.value)} placeholder="Educational qualifications" />
             <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" value={form.victory} onChange={(event) => update('victory', event.target.value)} placeholder="Election victory details" />
           </div>
-          <ImageUploader value={form.image} onChange={(value) => update('image', value)} onUploadStateChange={setUploading} />
+          <ImageUploader
+            value={form.image}
+            onChange={(value) => update('image', value)}
+            onUploadStateChange={setUploading}
+            onUploadComplete={(uploaded) => {
+              const metadata = toImgBBUploadMeta(uploaded);
+              if (metadata) setForm((state) => ({ ...state, image: metadata.imageUrl, imageUpload: metadata, ...metadata }));
+            }}
+          />
         </div>
         <button disabled={uploading || saving} className="inline-flex w-max items-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400"><Save size={18} />{saving ? 'Saving...' : 'Save About Info'}</button>
       </form>

@@ -8,6 +8,7 @@ import { useCollection, useCrud } from '@/hooks/useFirestore';
 import { super6Schemes } from '@/data/super6Data';
 import { translatePayloadFields } from '@/services/translationService';
 import useResolvedImage from '@/hooks/useResolvedImage';
+import { toImgBBUploadMeta, toImgBBUploadMetaList } from '@/utils/imageUploadMeta';
 
 const SAVE_TIMEOUT_MS = 60_000;
 
@@ -31,6 +32,7 @@ const emptyForm = () => ({
   thumbnail: '',
   image: '',
   images: [],
+  imageUploads: [],
   videos: [],
   progressPercent: 75,
   order: 1,
@@ -77,6 +79,7 @@ const thumbnailDraft = (scheme, item) => ({
   playlistThumbnail: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
   thumbnailUrl: item?.thumbnailUrl || item?.playlistThumbnail || item?.thumbnailImage || item?.videoThumbnail || '',
   thumbnailPath: item?.thumbnailPath || item?.playlistThumbnailPath || item?.videoThumbnailPath || '',
+  thumbnailUpload: item?.thumbnailUpload || null,
   previewUrl: '',
   pendingLocalPreview: false,
   thumbnailLabel_en: item?.thumbnailLabel_en || `${item?.title_en || scheme.nameEn} Video`
@@ -135,7 +138,8 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
   };
   const updateUploadedThumbnail = (uploaded) => {
     if (!uploaded) return;
-    const uploadedUrl = uploaded.url || uploaded.downloadURL || uploaded.displayUrl || '';
+    const metadata = toImgBBUploadMeta(uploaded);
+    const uploadedUrl = metadata?.imageUrl || uploaded.url || uploaded.displayUrl || '';
     if (!uploadedUrl) {
       setSaveError('Upload finished without a usable image URL. Please try again.');
       return;
@@ -144,7 +148,8 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
       ...state,
       playlistThumbnail: uploadedUrl,
       thumbnailUrl: uploadedUrl,
-      thumbnailPath: uploaded.path || uploaded.fullPath || state.thumbnailPath || '',
+      thumbnailPath: '',
+      thumbnailUpload: metadata,
       pendingLocalPreview: false
     }));
   };
@@ -165,7 +170,17 @@ const ThumbnailRow = ({ scheme, item, index, crud }) => {
         thumbnailImage: thumbnailUrl,
         videoThumbnail: thumbnailUrl,
         thumbnailUrl,
-        thumbnailPath: draft.thumbnailPath || item?.thumbnailPath || '',
+        thumbnailPath: '',
+        thumbnailUpload: draft.thumbnailUpload || item?.thumbnailUpload || null,
+        ...(draft.thumbnailUpload ? {
+          imageUrl: draft.thumbnailUpload.imageUrl,
+          displayUrl: draft.thumbnailUpload.displayUrl,
+          thumbUrl: draft.thumbnailUpload.thumbUrl,
+          deleteUrl: draft.thumbnailUpload.deleteUrl,
+          imgbbId: draft.thumbnailUpload.imgbbId,
+          sizeKB: draft.thumbnailUpload.sizeKB,
+          format: draft.thumbnailUpload.format
+        } : {}),
         thumbnailLabel_en: draft.thumbnailLabel_en || `${scheme.nameEn} Video`,
         isPublished: true,
         isActive: true
@@ -227,6 +242,16 @@ const ManageSuper6 = () => {
 
   const seededCount = useMemo(() => data.length, [data.length]);
   const update = (key, value) => setForm((state) => ({ ...state, [key]: value }));
+  const updateMainUploadMetadata = (uploaded) => {
+    const metadata = toImgBBUploadMetaList(uploaded);
+    if (!metadata.length) return;
+    setForm((state) => ({
+      ...state,
+      imageUploads: [...(state.imageUploads || []), ...metadata],
+      image: metadata[0].imageUrl,
+      thumbnail: state.thumbnail || metadata[0].imageUrl
+    }));
+  };
 
   const edit = (item) => {
     setEditing(item.id);
@@ -303,12 +328,24 @@ const ManageSuper6 = () => {
     setSaveError('');
     try {
       const image = form.image || form.thumbnail || form.images?.[0] || '';
+      const imageUploads = form.imageUploads || [];
+      const primaryUpload = imageUploads.find((item) => item.imageUrl === image || item.displayUrl === image) || imageUploads[0] || null;
       const payload = await withSaveTimeout(translatePayloadFields({
         ...form,
         image,
         thumbnail: form.thumbnail || image,
         progressPercent: Math.max(0, Math.min(100, Number(form.progressPercent) || 0)),
         images: form.images?.length ? form.images : image ? [image] : [],
+        ...(primaryUpload ? {
+          imageUrl: primaryUpload.imageUrl,
+          displayUrl: primaryUpload.displayUrl,
+          thumbUrl: primaryUpload.thumbUrl,
+          deleteUrl: primaryUpload.deleteUrl,
+          imgbbId: primaryUpload.imgbbId,
+          sizeKB: primaryUpload.sizeKB,
+          format: primaryUpload.format,
+          imageUploads
+        } : {}),
         videos: normalizeVideos(form.videos).filter((video) => video.url && !String(video.url).startsWith('blob:')).map(({ title, url }) => ({ title, url }))
       }), 'Saving Super 6 scheme timed out. Please try again.');
       if (editing) await withSaveTimeout(crud.update.mutateAsync({ id: editing, data: payload }), 'Saving Super 6 scheme timed out. Please try again.');
@@ -365,7 +402,7 @@ const ManageSuper6 = () => {
           </div>
         </div>
 
-        <ImageUploader onUploadStateChange={setImageUploading} value={form.images?.length ? form.images : form.image || form.thumbnail || []} onChange={(value) => Array.isArray(value) ? update('images', value) : update('thumbnail', value)} />
+        <ImageUploader onUploadStateChange={setImageUploading} value={form.images?.length ? form.images : form.image || form.thumbnail || []} onChange={(value) => Array.isArray(value) ? update('images', value) : update('thumbnail', value)} onUploadComplete={updateMainUploadMetadata} />
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-black text-slate-950">Videos</p>

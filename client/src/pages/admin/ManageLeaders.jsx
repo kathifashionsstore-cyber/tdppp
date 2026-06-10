@@ -6,6 +6,7 @@ import { db } from '@/services/firebase';
 import ImageUploadWithCompression from '@/components/admin/ImageUploadWithCompression';
 import { LEADERS_DATA } from '@/data/leadersData';
 import { toastError } from '@/utils/toastUtils.jsx';
+import { toImgBBUploadMeta } from '@/utils/imageUploadMeta';
 
 const ManageLeaders = () => {
   const [leaders, setLeaders] = useState([]);
@@ -17,6 +18,19 @@ const ManageLeaders = () => {
   }, []);
 
   const updateField = (leaderId, field, value) => setLeaders((items) => items.map((leader) => leader.id === leaderId ? { ...leader, [field]: value } : leader));
+  const updateLeaderImageMeta = (leaderId, uploaded) => {
+    const metadata = toImgBBUploadMeta(uploaded);
+    if (!metadata) return;
+    setLeaders((items) => items.map((leader) => leader.id === leaderId ? {
+      ...leader,
+      photo: metadata.imageUrl,
+      photoUpload: metadata,
+      photoUrl: metadata.imageUrl,
+      photoThumbUrl: metadata.thumbUrl,
+      photoDeleteUrl: metadata.deleteUrl,
+      photoImgBBId: metadata.imgbbId
+    } : leader));
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -52,6 +66,7 @@ const ManageLeaders = () => {
                 aspectRatio="1/1"
                 onUploadStateChange={(busy) => setUploading((state) => ({ ...state, [leader.id]: busy }))}
                 onChange={(url) => updateField(leader.id, 'photo', url)}
+                onUploadComplete={(uploaded) => updateLeaderImageMeta(leader.id, uploaded)}
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">

@@ -4,8 +4,9 @@ import { Edit, Plus, Save, Trash2, XCircle } from 'lucide-react';
 import { useDoc, useCrud } from '@/hooks/useFirestore';
 import ImageUploader from '@/components/admin/ImageUploader';
 import { confirmToast, toastError } from '@/utils/toastUtils.jsx';
+import { toImgBBUploadMeta } from '@/utils/imageUploadMeta';
 
-const initialSlide = { title_en: '', subtitle_en: '', tag_en: '', ctaText_en: '', ctaLink: '/daily-work', image: '' };
+const initialSlide = { title_en: '', subtitle_en: '', tag_en: '', ctaText_en: '', ctaLink: '/daily-work', image: '', imageUpload: null };
 
 const ManageHome = () => {
   const { data } = useDoc('heroSections', 'home');
@@ -74,7 +75,16 @@ const ManageHome = () => {
           <input className="min-h-12 rounded-xl border border-slate-200 px-4" placeholder="CTA text" value={slide.ctaText_en} onChange={(e) => setSlide({ ...slide, ctaText_en: e.target.value })} />
           <input className="min-h-12 rounded-xl border border-slate-200 px-4 md:col-span-2" placeholder="CTA link" value={slide.ctaLink} onChange={(e) => setSlide({ ...slide, ctaLink: e.target.value })} />
         </div>
-        <div className="mt-4"><ImageUploader value={slide.image} onChange={(image) => setSlide({ ...slide, image })} /></div>
+        <div className="mt-4">
+          <ImageUploader
+            value={slide.image}
+            onChange={(image) => setSlide({ ...slide, image })}
+            onUploadComplete={(uploaded) => {
+              const metadata = toImgBBUploadMeta(uploaded);
+              if (metadata) setSlide((state) => ({ ...state, image: metadata.imageUrl, imageUpload: metadata, ...metadata }));
+            }}
+          />
+        </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button onClick={save} className="inline-flex items-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red"><Save size={18} />{editingId ? 'Update Slide' : 'Add Slide'}</button>
           {editingId && <button onClick={reset} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-3 font-bold text-slate-700"><XCircle size={18} />Cancel Edit</button>}

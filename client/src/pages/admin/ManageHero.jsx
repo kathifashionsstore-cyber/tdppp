@@ -24,10 +24,8 @@ import {
   UploadCloud,
   XCircle
 } from 'lucide-react';
-import { deleteObject, getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { useCollection, useCrud } from '@/hooks/useFirestore';
-import { storage } from '@/services/firebase';
-import { compressImageFile, formatFileSize } from '@/services/imgbbService';
+import { compressImageFile, deleteFromImgBB, formatFileSize, uploadWithRetry } from '@/services/imgbbService';
 import { confirmToast } from '@/utils/toastUtils.jsx';
 import {
   PAGE_HERO_CONFIGS,
@@ -220,19 +218,30 @@ const PageHeroManager = ({ config, onBack }) => {
     const toastId = toast.loading(`Uploading to ${config.pageLabel}...`);
 
     try {
-      const imagePath = `${config.storagePath}/${Date.now()}.webp`;
-      const uploaded = await uploadHeroImageFile(selectedImage.file, imagePath, (amount) => {
-        setProgress({ stage: 'uploading', value: Math.round(amount || 0) });
+      const fileName = `${config.pageName}-${Date.now()}`;
+      const uploaded = await uploadWithRetry(selectedImage.file, fileName, 3, {
+        onProgress: (amount) => {
+          setProgress({ stage: 'uploading', value: Math.round(amount || 0) });
+        },
+        onRetry: (attempt, maxRetries) => {
+          setProgress({ stage: 'retrying', value: 35, attempt, maxRetries });
+          toast.loading(`🔄 Retrying upload... Attempt ${attempt} of ${maxRetries}`, { id: toastId });
+        }
       });
 
-      if (!uploaded.downloadURL?.startsWith('https://firebasestorage.googleapis.com')) {
+      if (!uploaded.url?.startsWith('https://i.ibb.co/')) {
         throw new Error('Could not get image URL. Try uploading again');
       }
 
       try {
+        setProgress({ stage: 'saving', value: 92 });
+        toast.loading('💾 Saving to database...', { id: toastId });
         await crud.create.mutateAsync({
-          imageUrl: uploaded.downloadURL,
-          imagePath: uploaded.imagePath,
+          imageUrl: uploaded.url,
+          displayUrl: uploaded.displayUrl,
+          thumbUrl: uploaded.thumbUrl,
+          deleteUrl: uploaded.deleteUrl,
+          imgbbId: uploaded.imgbbId,
           order: nextOrder(images),
           isActive: true,
           pageName: config.pageName,
@@ -247,7 +256,7 @@ const PageHeroManager = ({ config, onBack }) => {
       }
 
       setProgress({ stage: 'done', value: 100 });
-      toast.success(`Image uploaded to ${config.pageLabel} successfully`, { id: toastId });
+      toast.success('✅ Image uploaded successfully!', { id: toastId });
       clearSelectedImage();
     } catch (error) {
       const message = error?.message?.startsWith('Could not get image URL')
@@ -264,16 +273,14 @@ const PageHeroManager = ({ config, onBack }) => {
   const remove = async (item) => {
     const confirmed = await confirmToast({
       title: `Delete this image from ${config.pageLabel}?`,
-      message: 'This removes the file from Firebase Storage and deletes its database record.',
+      message: 'This removes the image from ImgBB and deletes its database record.',
       confirmLabel: 'Confirm Delete'
     });
     if (!confirmed) return;
 
     setActionId(`delete-${item.id}`);
     try {
-      if (item.imagePath) {
-        await deleteObject(storageRef(storage, item.imagePath));
-      }
+      await deleteFromImgBB(item.deleteUrl);
       await crud.remove.mutateAsync(item.id);
       await normalizeOrderFields(images.filter((image) => image.id !== item.id), crud);
       toast.success(`Image deleted from ${config.pageLabel}`);
@@ -384,7 +391,7 @@ const PageHeroManager = ({ config, onBack }) => {
                     <div className="grid gap-1 text-sm font-semibold text-slate-500">
                       <p>Size: {item.sizeKB ? `${item.sizeKB} KB` : 'Unknown'}</p>
                       <p>Format: {(item.format || 'webp').toUpperCase()}</p>
-                      <p className="break-all text-xs text-slate-400">{item.imagePath}</p>
+                      <p className="break-all text-xs text-slate-400">{item.deleteUrl || item.displayUrl || item.imageUrl}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -462,7 +469,7 @@ const PageHeroManager = ({ config, onBack }) => {
             <UploadCloud className="mx-auto" size={30} />
             {isFull ? 'Maximum reached' : 'Click or drag to upload'}
             <span className="text-xs text-yellow-800/75">Auto-compressed to 300KB WebP. Recommended: 16:9 landscape.</span>
-            <span className="text-xs text-yellow-800/75">Storage path: {config.storagePath}/[timestamp].webp</span>
+            <span className="text-xs text-yellow-800/75">ImgBB name: {config.pageName}-[timestamp]</span>
           </span>
         </button>
         <input ref={inputRef} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(event) => prepareFile(event.target.files?.[0])} />
@@ -473,7 +480,7 @@ const PageHeroManager = ({ config, onBack }) => {
               <div className="h-full rounded-full bg-tdp-yellow transition-all duration-300" style={{ width: `${progress.value}%` }} />
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-sm font-black">
-              <span>{progress.stage === 'uploading' ? 'Uploading to Firebase Storage...' : 'Compressing image...'}</span>
+              <span>{progress.stage === 'saving' ? '💾 Saving to database...' : progress.stage === 'retrying' ? `🔄 Retrying upload... Attempt ${progress.attempt || 2} of ${progress.maxRetries || 3}` : progress.stage === 'uploading' ? '☁️ Uploading image to server...' : '⏳ Compressing image...'}</span>
               <span>{progress.value}%</span>
             </div>
           </div>
@@ -512,37 +519,6 @@ const PageHeroManager = ({ config, onBack }) => {
     </div>
   );
 };
-
-const uploadHeroImageFile = (file, imagePath, onProgress) => new Promise((resolve, reject) => {
-  const targetRef = storageRef(storage, imagePath);
-  const uploadTask = uploadBytesResumable(targetRef, file, {
-    contentType: 'image/webp',
-    customMetadata: {
-      originalName: file.name
-    }
-  });
-
-  uploadTask.on(
-    'state_changed',
-    (snapshot) => {
-      if (snapshot.totalBytes) {
-        onProgress?.((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-      }
-    },
-    reject,
-    async () => {
-      try {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        resolve({
-          downloadURL,
-          imagePath: uploadTask.snapshot.ref.fullPath
-        });
-      } catch (error) {
-        reject(error);
-      }
-    }
-  );
-});
 
 const sortHeroImages = (items = []) => items
   .filter((item) => item?.imageUrl)

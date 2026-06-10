@@ -7,6 +7,7 @@ import { useCollection, useCrud } from '@/hooks/useFirestore';
 import { formatDate } from '@/utils/dateUtils';
 import { confirmToast, toastError, toastSuccess } from '@/utils/toastUtils.jsx';
 import { toDate } from '@/utils/helpers';
+import { toImgBBUploadMeta } from '@/utils/imageUploadMeta';
 
 const DRAFT_KEY = 'daily-work-schedule-draft';
 const PHOTO_DRAFT_KEY = 'daily-work-photo-draft';
@@ -27,6 +28,7 @@ const createEntry = (order = 1) => ({
 const emptySchedule = () => ({
   dateInput: todayInput(),
   topImage: '',
+  topImageUpload: null,
   greeting_te: 'Namaskaram to everyone',
   title_te: 'Tour schedule of Honorable Narasaraopet MLA Dr. Chadalavada Aravinda Babu',
   closingNote_te: '',
@@ -41,6 +43,7 @@ const emptyPhoto = () => ({
   dateInput: todayInput(),
   image: '',
   images: [],
+  imageUpload: null,
   category: 'visit',
   isPublished: true
 });
@@ -113,6 +116,7 @@ const ManageDailyWork = () => {
       ...item,
       dateInput: toDateInputValue(item.date),
       topImage: item.topImage || item.topImageUrl || '',
+      topImageUpload: item.topImageUpload || null,
       entries: (item.entries?.length ? item.entries : [createEntry(1)]).map((entry, index) => ({
         ...createEntry(index + 1),
         ...entry,
@@ -147,10 +151,17 @@ const ManageDailyWork = () => {
 
     setScheduleSaving(true);
     try {
+      const topImageUpload = scheduleForm.topImageUpload || null;
       const payload = {
         date: inputToDate(scheduleForm.dateInput),
         topImage: scheduleForm.topImage || '',
         topImageUrl: scheduleForm.topImage || '',
+        ...(topImageUpload ? {
+          topImageUpload,
+          topImageDeleteUrl: topImageUpload.deleteUrl,
+          topImageThumbUrl: topImageUpload.thumbUrl,
+          topImageImgBBId: topImageUpload.imgbbId
+        } : {}),
         greeting_te: scheduleForm.greeting_te || '',
         greeting_en: scheduleForm.greeting_te || '',
         title_te: scheduleForm.title_te || '',
@@ -194,7 +205,8 @@ const ManageDailyWork = () => {
       ...item,
       dateInput: toDateInputValue(item.date || item.createdAt),
       image: item.image || item.images?.[0] || '',
-      images: item.images?.length ? item.images : item.image ? [item.image] : []
+      images: item.images?.length ? item.images : item.image ? [item.image] : [],
+      imageUpload: item.imageUpload || null
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -207,6 +219,7 @@ const ManageDailyWork = () => {
     if (!photoForm.title_en.trim()) return toast.error('Title is required');
     setPhotoSaving(true);
     try {
+      const imageUpload = photoForm.imageUpload || null;
       const payload = {
         title_en: photoForm.title_en.trim(),
         title_te: photoForm.title_te || photoForm.title_en.trim(),
@@ -215,6 +228,16 @@ const ManageDailyWork = () => {
         date: inputToDate(photoForm.dateInput),
         image,
         images: [image],
+        ...(imageUpload ? {
+          imageUrl: imageUpload.imageUrl,
+          displayUrl: imageUpload.displayUrl,
+          thumbUrl: imageUpload.thumbUrl,
+          deleteUrl: imageUpload.deleteUrl,
+          imgbbId: imageUpload.imgbbId,
+          sizeKB: imageUpload.sizeKB,
+          format: imageUpload.format,
+          imageUpload
+        } : {}),
         category: photoForm.category || 'visit',
         isPublished: !!photoForm.isPublished,
         isActive: !!photoForm.isPublished
@@ -256,7 +279,17 @@ const ManageDailyWork = () => {
             <p className="mt-1 text-lg font-black text-slate-950">{dayOfWeek}</p>
           </div>
 
-          <ImageUploader label="Top Image" value={scheduleForm.topImage || ''} aspectRatio="16/9" onUploadStateChange={setScheduleUploading} onChange={(url) => updateSchedule('topImage', url)} />
+          <ImageUploader
+            label="Top Image"
+            value={scheduleForm.topImage || ''}
+            aspectRatio="16/9"
+            onUploadStateChange={setScheduleUploading}
+            onChange={(url) => updateSchedule('topImage', url)}
+            onUploadComplete={(uploaded) => {
+              const metadata = toImgBBUploadMeta(uploaded);
+              if (metadata) setScheduleForm((state) => ({ ...state, topImage: metadata.imageUrl, topImageUpload: metadata }));
+            }}
+          />
 
           <label className="grid gap-1 text-sm font-black text-slate-700">
             Greeting
@@ -353,7 +386,17 @@ const ManageDailyWork = () => {
         </div>
 
         <form onSubmit={savePhoto} className="grid gap-4">
-          <ImageUploader label="Photo" value={photoForm.image || photoForm.images?.[0] || ''} aspectRatio="16/9" onUploadStateChange={setPhotoUploading} onChange={(url) => setPhotoForm((state) => ({ ...state, image: url, images: [url].filter(Boolean) }))} />
+          <ImageUploader
+            label="Photo"
+            value={photoForm.image || photoForm.images?.[0] || ''}
+            aspectRatio="16/9"
+            onUploadStateChange={setPhotoUploading}
+            onChange={(url) => setPhotoForm((state) => ({ ...state, image: url, images: [url].filter(Boolean) }))}
+            onUploadComplete={(uploaded) => {
+              const metadata = toImgBBUploadMeta(uploaded);
+              if (metadata) setPhotoForm((state) => ({ ...state, image: metadata.imageUrl, images: [metadata.imageUrl], imageUpload: metadata }));
+            }}
+          />
           <label className="grid gap-1 text-sm font-black text-slate-700">
             Title
             <input value={photoForm.title_en || ''} onChange={(event) => updatePhoto('title_en', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />

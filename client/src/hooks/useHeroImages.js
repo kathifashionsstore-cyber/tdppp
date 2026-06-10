@@ -29,7 +29,8 @@ export const useHeroImages = (pageName) => {
         image: item.imageUrl,
         imageDesktop: item.imageUrl,
         imageMobile: item.imageUrl,
-        imagePath: item.imagePath,
+        deleteUrl: item.deleteUrl,
+        thumbUrl: item.thumbUrl,
         order: Number(item.order) || index + 1,
         isActive: item.isActive !== false,
         alt_en: `${config.pageLabel} hero banner ${index + 1}`

@@ -1,18 +1,13 @@
-import { getDownloadURL, ref as storageRef } from 'firebase/storage';
-import { storage } from '@/services/firebase';
-
 export const normalizeImageCandidate = (candidate) => {
   if (!candidate) return '';
   if (Array.isArray(candidate)) return getFirstImageCandidate(...candidate);
   if (typeof candidate === 'string') return candidate.trim();
   if (typeof candidate === 'object') {
     return normalizeImageCandidate(
-      candidate.downloadURL
-      || candidate.url
+      candidate.url
       || candidate.displayUrl
       || candidate.src
-      || candidate.fullPath
-      || candidate.path
+      || candidate.thumbUrl
     );
   }
   return '';
@@ -35,6 +30,5 @@ export const resolveImageSource = async (candidate) => {
   const value = normalizeImageCandidate(candidate);
   if (!value) return '';
   if (isViewableImageUrl(value)) return value;
-  const downloadURL = await getDownloadURL(storageRef(storage, value));
-  return downloadURL;
+  return '';
 };

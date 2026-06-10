@@ -10,6 +10,7 @@ import { CATEGORIES } from '@/utils/constants';
 import { autoIndexContent } from '@/services/chatbotService';
 import { translatePayloadFields } from '@/services/translationService';
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from '@/utils/helpers';
+import { toImgBBUploadMetaList } from '@/utils/imageUploadMeta';
 
 const tomorrow = () => {
   const date = new Date();
@@ -57,6 +58,17 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
   const categories = useMemo(() => CATEGORIES[collectionName] || CATEGORIES[type] || ['general'], [collectionName, type]);
   const update = (key, value) => setForm((state) => ({ ...state, [key]: value }));
   const label = type === 'towns' ? 'Name' : 'Title';
+  const storesMultipleImages = collectionName === 'dailyWork' || collectionName === 'gallery' || collectionName === 'narasaraopetSections';
+
+  const handleUploadComplete = (uploaded) => {
+    const metadata = toImgBBUploadMetaList(uploaded);
+    if (!metadata.length) return;
+    setForm((state) => ({
+      ...state,
+      imageUploads: storesMultipleImages ? [...(state.imageUploads || []), ...metadata] : metadata,
+      ...(!storesMultipleImages ? metadata[0] : {})
+    }));
+  };
 
   const normalizePayload = async () => {
     const rawVideoUrl = form.videoUrl || form.youtubeUrl || form.url || '';
@@ -67,6 +79,8 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
     const titleValue = form.title_en || form.name_en || fallbackTitle;
     const descriptionValue = form.description_en || form.content_en || form.message_en || '';
     const locationValue = form.location_en || '';
+    const imageUploads = form.imageUploads || [];
+    const primaryUpload = imageUploads.find((item) => item.imageUrl === imageValue || item.displayUrl === imageValue) || imageUploads[0] || null;
     const payload = {
       ...form,
       title_en: titleValue,
@@ -82,7 +96,17 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
       videoUrl: collectionName === 'news' ? rawVideoUrl : form.videoUrl,
       videoEmbedUrl,
       applyLink: collectionName === 'schemes' ? form.applyLink || form.linkUrl || '' : form.applyLink,
-      images: form.images?.length ? form.images : imageValue ? [imageValue] : []
+      images: form.images?.length ? form.images : imageValue ? [imageValue] : [],
+      ...(primaryUpload ? {
+        imageUrl: primaryUpload.imageUrl,
+        displayUrl: primaryUpload.displayUrl,
+        thumbUrl: primaryUpload.thumbUrl,
+        deleteUrl: primaryUpload.deleteUrl,
+        imgbbId: primaryUpload.imgbbId,
+        sizeKB: primaryUpload.sizeKB,
+        format: primaryUpload.format,
+        imageUploads
+      } : {})
     };
     return translatePayloadFields(payload);
   };
@@ -181,8 +205,8 @@ const AdminCrudPage = ({ collectionName, title, type = collectionName }) => {
           </div>
         )}
 
-        {!(collectionName === 'gallery' && form.type === 'video') && <ImageUploader onUploadStateChange={setImageUploading} multiple={collectionName === 'dailyWork' || collectionName === 'gallery' || collectionName === 'narasaraopetSections'} value={form.images?.length ? form.images : form.image || form.thumbnail || []} onChange={(value) => Array.isArray(value) ? update('images', value) : update(collectionName === 'news' ? 'thumbnail' : 'image', value)} />}
-        {collectionName === 'gallery' && form.type === 'video' && <ImageUploader onUploadStateChange={setImageUploading} value={form.thumbnail || ''} onChange={(value) => update('thumbnail', value)} />}
+        {!(collectionName === 'gallery' && form.type === 'video') && <ImageUploader onUploadStateChange={setImageUploading} multiple={storesMultipleImages} value={form.images?.length ? form.images : form.image || form.thumbnail || []} onChange={(value) => Array.isArray(value) ? update('images', value) : update(collectionName === 'news' ? 'thumbnail' : 'image', value)} onUploadComplete={handleUploadComplete} />}
+        {collectionName === 'gallery' && form.type === 'video' && <ImageUploader onUploadStateChange={setImageUploading} value={form.thumbnail || ''} onChange={(value) => update('thumbnail', value)} onUploadComplete={handleUploadComplete} />}
 
         <div className="flex flex-wrap items-center gap-4 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">
           <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.isPublished} onChange={(e) => update('isPublished', e.target.checked)} /> Published</label>

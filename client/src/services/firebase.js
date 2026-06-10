@@ -2,7 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBp6dyQHsP05ptxyEIo0R71fpxvYbfHa8c',
@@ -25,6 +24,4 @@ export const db = (() => {
     return getFirestore(app);
   }
 })();
-export const storage = getStorage(app);
-
 export const analyticsPromise = isSupported().then((supported) => supported ? getAnalytics(app) : null);

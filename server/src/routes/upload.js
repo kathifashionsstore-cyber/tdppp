@@ -18,11 +18,12 @@ router.post('/image', async (req, res, next) => {
         error: 'Image too large. Maximum allowed size is 300KB. Please compress before uploading.'
       });
     }
+    const apiKey = process.env.IMGBB_API_KEY || process.env.VITE_IMGBB_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'IMGBB_API_KEY is not configured.' });
     const form = new FormData();
-    form.append('key', process.env.IMGBB_API_KEY || '202b1fcbad15a90cccbd9e2a44bcb4fa');
     form.append('image', req.body.image);
     if (req.body.name) form.append('name', req.body.name);
-    const response = await axios.post('https://api.imgbb.com/1/upload', form, { headers: form.getHeaders() });
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, { headers: form.getHeaders() });
     res.json(response.data);
   } catch (error) {
     next(error);
