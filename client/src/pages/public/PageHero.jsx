@@ -1,22 +1,28 @@
 import { Helmet } from 'react-helmet-async';
-import { useDoc } from '@/hooks/useFirestore';
+import { useCollection } from '@/hooks/useFirestore';
 import { DEFAULT_HERO_IMAGE } from '@/utils/constants';
-import { getLangField } from '@/utils/helpers';
-import { useLanguage } from '@/hooks/useLanguage';
 import MlaHero from '@/components/ui/MlaHero';
 
 const PageHero = ({ page, title, subtitle }) => {
-  const { data: globalHero } = useDoc('heroSections', 'global');
-  const { data: pageHero } = useDoc('heroSections', page);
-  const { language } = useLanguage();
-  const pageSlides = (pageHero?.slides || []).filter((slide) => slide?.isActive !== false && (slide.image || slide.imageMobile));
-  const globalSlides = (globalHero?.slides || []).filter((slide) => slide?.isActive !== false && (slide.image || slide.imageMobile));
-  const data = pageHero || {};
-  const pageTitle = getLangField(data, 'title', language) || title;
-  const pageSubtitle = getLangField(data, 'subtitle', language) || subtitle;
-  const desc = getLangField(data, 'description', language) || pageSubtitle;
-  const slides = pageSlides.length ? pageHero.slides : globalSlides.length ? globalHero.slides : [];
-  const firstImage = slides.find((slide) => (slide?.image || slide?.imageMobile) && slide.isActive !== false);
+  const { data = [] } = useCollection('heroSections', { activeOnly: true, orderByField: 'order', orderDirection: 'asc' });
+  const pageTitle = title;
+  const pageSubtitle = subtitle;
+  const desc = pageSubtitle;
+  const slides = data
+    .filter((item) => item?.imageUrl && item.isActive !== false)
+    .sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99))
+    .slice(0, 5)
+    .map((item, index) => ({
+      id: item.id,
+      image: item.imageUrl,
+      imageDesktop: item.imageUrl,
+      imageMobile: item.imageUrl,
+      imagePath: item.imagePath,
+      order: item.order || index + 1,
+      isActive: item.isActive !== false,
+      alt_en: `Narasaraopet TDP hero banner ${index + 1}`
+    }));
+  const firstImage = slides[0];
 
   return (
     <>
@@ -25,7 +31,7 @@ const PageHero = ({ page, title, subtitle }) => {
         <meta name="description" content={desc} />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={desc} />
-        <meta property="og:image" content={firstImage?.image || firstImage?.imageMobile || data?.backgroundImage || DEFAULT_HERO_IMAGE || '/og-image.svg'} />
+        <meta property="og:image" content={firstImage?.image || DEFAULT_HERO_IMAGE || '/og-image.svg'} />
       </Helmet>
       <MlaHero slides={slides} />
     </>

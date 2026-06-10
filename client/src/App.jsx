@@ -82,6 +82,7 @@ const App = () => {
                 <Route path="home" element={<ManageHome />} />
                 <Route path="leaders" element={<ManageLeaders />} />
                 <Route path="hero" element={<ManageHero />} />
+                <Route path="page-heroes" element={<ManageHero />} />
                 <Route path="daily-work" element={<ManageDailyWork />} />
                 <Route path="achievements" element={<Navigate to="/admin/dashboard" replace />} />
                 <Route path="news" element={<ManageNews />} />

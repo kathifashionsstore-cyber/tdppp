@@ -1,108 +1,116 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ImagePlus, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
-import { useCrud, useDoc } from '@/hooks/useFirestore';
-import ImageUploader from '@/components/admin/ImageUploader';
-import { translatePayloadFields } from '@/services/translationService';
-import { confirmToast } from '@/utils/toastUtils.jsx';
+import { CheckCircle2, ImagePlus, Loader2, Trash2, UploadCloud } from 'lucide-react';
+import { deleteObject, ref as storageRef } from 'firebase/storage';
+import { useCollection, useCrud } from '@/hooks/useFirestore';
+import { storage } from '@/services/firebase';
+import { compressImageFile, formatFileSize, uploadCompressedImageToFirebaseStorage } from '@/services/imgbbService';
+import { confirmToast, toastError, toastSuccess } from '@/utils/toastUtils.jsx';
 
-const HERO_PAGES = [
-  { key: 'home', label: 'Home', title: 'Dr. Chadalavada Aravinda Babu', subtitle: 'MLA - Narasaraopet, Telugu Desam Party' },
-  { key: 'leaders', label: 'Leaders', title: 'Our Leadership', subtitle: 'State leaders guiding Andhra Pradesh and Narasaraopet development' },
-  { key: 'daily-work', label: 'Daily Work', title: 'Daily Work', subtitle: 'Development works, visits, and public service updates' },
-  { key: 'gallery', label: 'Gallery', title: 'Gallery', subtitle: 'Photos and videos of constituency work' },
-  { key: 'super6', label: 'Super 6', title: 'Super 6 Schemes', subtitle: 'Flagship welfare schemes of Telugu Desam Party' },
-  { key: 'schemes', label: 'Schemes', title: 'Government Schemes', subtitle: 'General welfare schemes, application links, and public information' },
-  { key: 'narasaraopet', label: 'Narasaraopet', title: 'Narasaraopet Constituency', subtitle: 'Places, maps, history, and development updates' },
-  { key: 'news', label: 'News', title: 'News', subtitle: 'Latest updates, announcements, and videos' },
-  { key: 'contact', label: 'Contact', title: 'Contact MLA Office', subtitle: 'Reach the Narasaraopet constituency office' }
-];
-
-const makeSlide = (order = 1) => ({
-  id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  title_en: '',
-  subtitle_en: '',
-  alt_en: '',
-  image: '',
-  imageMobile: '',
-  order,
-  isActive: true
-});
-
-const defaultDoc = (page) => ({
-  pageKey: page.key,
-  title_en: page.title,
-  subtitle_en: page.subtitle,
-  slides: []
-});
+const MAX_HERO_IMAGES = 5;
 
 const ManageHero = () => {
-  const [activeKey, setActiveKey] = useState(HERO_PAGES[0].key);
-  const activePage = HERO_PAGES.find((page) => page.key === activeKey) || HERO_PAGES[0];
-  const { data, isLoading } = useDoc('heroSections', activeKey);
+  const inputRef = useRef(null);
+  const { data = [], isLoading } = useCollection('heroSections', { orderByField: 'order', orderDirection: 'asc' });
   const crud = useCrud('heroSections');
-  const [draft, setDraft] = useState(defaultDoc(activePage));
-  const [imageUploading, setImageUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState({ stage: '', value: 0 });
+  const [preview, setPreview] = useState('');
 
-  useEffect(() => {
-    setDraft({ ...defaultDoc(activePage), ...(data || {}), pageKey: activePage.key, slides: data?.slides || [] });
-  }, [activePage, data]);
+  const images = useMemo(() => data
+    .filter((item) => item.imageUrl)
+    .sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99))
+    .slice(0, MAX_HERO_IMAGES), [data]);
+  const isFull = images.length >= MAX_HERO_IMAGES;
 
-  const slides = useMemo(
-    () => [...(draft.slides || [])].sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99)),
-    [draft.slides]
-  );
+  const chooseFile = () => {
+    if (isFull) {
+      toast.error('Maximum 5 images allowed. Delete one to add a new one');
+      return;
+    }
+    inputRef.current?.click();
+  };
 
-  const updateDraft = (key, value) => setDraft((state) => ({ ...state, [key]: value }));
-  const setSlides = (nextSlides) => setDraft((state) => ({ ...state, slides: nextSlides }));
-  const addSlide = () => setSlides([...(draft.slides || []), makeSlide((draft.slides || []).length + 1)]);
-  const updateSlide = (id, fields) => setSlides((draft.slides || []).map((slide) => slide.id === id ? { ...slide, ...fields } : slide));
-  const removeSlide = async (id) => {
+  const uploadFile = async (file) => {
+    if (!file || busy) return;
+    if (isFull) {
+      toast.error('Maximum 5 images allowed. Delete one to add a new one');
+      return;
+    }
+
+    const controller = new AbortController();
+    setBusy(true);
+    setPreview(URL.createObjectURL(file));
+    setProgress({ stage: 'compressing', value: 5 });
+    const toastId = toast.loading('Compressing hero image...');
+
+    try {
+      const compressed = await compressImageFile(file, {
+        maxSizeKB: 300,
+        signal: controller.signal,
+        onProgress: ({ progress: amount }) => setProgress({ stage: 'compressing', value: Math.round(amount || 10) })
+      });
+      setProgress({ stage: 'uploading', value: 40 });
+      toast.loading('Uploading hero image...', { id: toastId });
+
+      const uploaded = await uploadCompressedImageToFirebaseStorage(compressed.file, {
+        folder: 'hero/banners',
+        signal: controller.signal,
+        onProgress: (amount) => setProgress({ stage: 'uploading', value: 40 + Math.round((amount || 0) * 0.55) })
+      });
+
+      await crud.create.mutateAsync({
+        imageUrl: uploaded.downloadURL || uploaded.url,
+        imagePath: uploaded.path || uploaded.fullPath,
+        order: nextOrder(images),
+        isActive: true
+      });
+
+      setProgress({ stage: 'done', value: 100 });
+      toast.success('Hero image uploaded successfully', { id: toastId });
+      if (inputRef.current) inputRef.current.value = '';
+    } catch (error) {
+      toast.error(error.message || 'Hero image upload failed', { id: toastId });
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => {
+        setProgress({ stage: '', value: 0 });
+        setPreview('');
+      }, 1200);
+    }
+  };
+
+  const toggleActive = async (item) => {
+    try {
+      await crud.update.mutateAsync({ id: item.id, data: { isActive: !item.isActive } });
+      toastSuccess(item.isActive ? 'Hero image disabled' : 'Hero image enabled');
+    } catch (error) {
+      toastError(error, 'Update failed');
+    }
+  };
+
+  const updateOrder = async (item, order) => {
+    try {
+      await crud.update.mutateAsync({ id: item.id, data: { order: Number(order) || item.order || 1 } });
+      toastSuccess('Hero image order updated');
+    } catch (error) {
+      toastError(error, 'Order update failed');
+    }
+  };
+
+  const remove = async (item) => {
     const confirmed = await confirmToast({
-      title: 'Delete hero banner?',
-      message: 'Remove this banner from the current draft?',
+      title: 'Delete hero image?',
+      message: 'This removes the image from Firebase Storage and the public slideshow.',
       confirmLabel: 'Delete'
     });
-    if (confirmed) setSlides((draft.slides || []).filter((slide) => slide.id !== id));
-  };
-  const reset = () => setDraft({ ...defaultDoc(activePage), ...(data || {}), pageKey: activePage.key, slides: data?.slides || [] });
-
-  const save = async () => {
-    if (imageUploading) return toast.error('Please wait until banner upload finishes');
-    const imageSlides = (draft.slides || []).filter((slide) => slide.image || slide.imageMobile);
-    if (!imageSlides.length) return toast.error('Add at least one hero banner image before saving');
-    setSaving(true);
+    if (!confirmed) return;
     try {
-      const translatedDoc = await translatePayloadFields({
-        ...draft,
-        pageKey: activePage.key,
-        title_en: draft.title_en || activePage.title,
-        subtitle_en: draft.subtitle_en || activePage.subtitle
-      }, ['title', 'subtitle', 'description']);
-
-      const translatedSlides = await Promise.all(imageSlides.map((slide, index) => translatePayloadFields({
-        ...slide,
-        id: slide.id || `${Date.now()}-${index}`,
-        title_en: slide.title_en || '',
-        subtitle_en: slide.subtitle_en || '',
-        alt_en: slide.alt_en || slide.title_en || `${activePage.label} hero banner ${index + 1}`,
-        order: Number(slide.order) || index + 1,
-        isActive: slide.isActive !== false
-      }, ['title', 'subtitle', 'alt'])));
-
-      await crud.set.mutateAsync({
-        id: activePage.key,
-        data: {
-          ...translatedDoc,
-          slides: translatedSlides
-        }
-      });
-      toast.success('Saved successfully');
+      if (item.imagePath) await deleteObject(storageRef(storage, item.imagePath)).catch(() => {});
+      await crud.remove.mutateAsync(item.id);
+      toastSuccess('Image deleted');
     } catch (error) {
-      toast.error(`Failed - ${error.message || 'Unable to save hero banners'}`);
-    } finally {
-      setSaving(false);
+      toastError(error, 'Delete failed');
     }
   };
 
@@ -110,98 +118,101 @@ const ManageHero = () => {
     <div className="grid gap-6">
       <div className="rounded-2xl bg-gradient-to-r from-slate-950 to-slate-800 p-5 text-white shadow-xl">
         <p className="text-xs font-bold uppercase tracking-wide text-tdp-yellow">All Pages Hero Images Manager</p>
-        <h1 className="mt-1 text-2xl font-black md:text-3xl">Page Hero Banners</h1>
-        <p className="mt-1 text-sm text-white/65">Choose a page, then add, edit, delete, reorder, and publish the hero banners shown at the top of that page.</p>
+        <h1 className="mt-1 text-2xl font-black md:text-3xl">Upload up to 5 banner images</h1>
+        <p className="mt-1 text-sm text-white/65">These images slide on every page hero section.</p>
       </div>
 
-      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Select Page</p>
-        <div className="flex flex-wrap gap-2">
-          {HERO_PAGES.map((page) => (
-            <button
-              key={page.key}
-              type="button"
-              onClick={() => setActiveKey(page.key)}
-              className={`rounded-xl px-4 py-2 text-sm font-black transition ${activeKey === page.key ? 'bg-tdp-red text-white shadow-red' : 'bg-slate-100 text-slate-700 hover:bg-yellow-50 hover:text-tdp-red'}`}
-            >
-              {page.label}
-            </button>
-          ))}
+      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
+        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-slate-950">Current Images ({images.length}/{MAX_HERO_IMAGES} uploaded)</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Each upload is compressed to the 300KB target before saving.</p>
+          </div>
+          <button type="button" onClick={chooseFile} disabled={busy || isFull} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-tdp-yellow px-5 text-base font-black text-tdp-navy shadow-yellow disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 md:w-auto">
+            {busy ? <Loader2 className="animate-spin" size={18} /> : <ImagePlus size={18} />}
+            Add Image
+          </button>
+          <input ref={inputRef} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(event) => uploadFile(event.target.files?.[0])} />
         </div>
-      </div>
 
-      <section className="grid gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="grid gap-1 text-sm font-bold text-slate-700">
-            Hero title
-            <input className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" value={draft.title_en || ''} onChange={(event) => updateDraft('title_en', event.target.value)} />
-          </label>
-          <label className="grid gap-1 text-sm font-bold text-slate-700">
-            Hero subtitle
-            <input className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" value={draft.subtitle_en || ''} onChange={(event) => updateDraft('subtitle_en', event.target.value)} />
-          </label>
-        </div>
-      </section>
+        <button
+          type="button"
+          disabled={busy || isFull}
+          onClick={chooseFile}
+          onDrop={(event) => {
+            event.preventDefault();
+            uploadFile(event.dataTransfer.files?.[0]);
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          className="mb-5 grid min-h-40 w-full place-items-center rounded-2xl border-2 border-dashed border-yellow-300 bg-yellow-50 p-5 text-center text-sm font-bold text-yellow-900 transition hover:border-tdp-red disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+        >
+          <span className="grid gap-2">
+            <UploadCloud className="mx-auto" size={30} />
+            {isFull ? 'Maximum 5 images allowed' : 'Click or drag one hero banner image'}
+            <span className="text-xs text-yellow-800/75">Firebase path: hero/banners/[timestamp].webp</span>
+          </span>
+        </button>
 
-      <div className="grid gap-4">
-        {isLoading ? <div className="rounded-2xl bg-white p-6 font-bold text-slate-500 shadow-sm">Loading {activePage.label} hero banners...</div> : slides.map((slide, index) => (
-          <section key={slide.id} className="grid gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 lg:grid-cols-[280px_1fr_auto] lg:p-5">
-            <div className="grid gap-3">
-              <ImageUploader
-                label="Desktop / Main Banner"
-                value={slide.image || ''}
-                aspectRatio="16/9"
-                onUploadStateChange={setImageUploading}
-                onChange={(url) => updateSlide(slide.id, { image: url })}
-              />
-              <ImageUploader
-                label="Mobile Banner Optional"
-                value={slide.imageMobile || ''}
-                aspectRatio="4/5"
-                onUploadStateChange={setImageUploading}
-                onChange={(url) => updateSlide(slide.id, { imageMobile: url })}
-              />
+        {busy && (
+          <div className="mb-5 rounded-xl border border-yellow-200 bg-slate-950 p-3 text-yellow-100">
+            <div className="h-2 overflow-hidden rounded-full bg-white/15">
+              <div className="h-full rounded-full bg-tdp-yellow transition-all duration-300" style={{ width: `${progress.value}%` }} />
             </div>
-            <div className="grid content-start gap-3">
-              <div className="overflow-hidden rounded-xl bg-slate-100">
-                {slide.image || slide.imageMobile ? (
-                  <img src={slide.image || slide.imageMobile} alt="" className="aspect-video w-full object-cover" />
-                ) : (
-                  <div className="grid aspect-video place-items-center text-slate-400">
-                    <ImagePlus size={32} />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-sm font-black">
+              <span>{progress.stage === 'compressing' ? 'Compressing image...' : 'Uploading to Firebase Storage...'}</span>
+              <span>{progress.value}%</span>
+            </div>
+            {preview && <img src={preview} alt="" className="mt-3 aspect-video w-full max-w-sm rounded-lg object-cover ring-1 ring-yellow-300/40" />}
+          </div>
+        )}
+
+        {isFull && <p className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm font-black text-yellow-900">Maximum 5 images allowed. Delete one to add a new one</p>}
+
+        {isLoading ? (
+          <div className="rounded-xl bg-slate-50 p-5 font-bold text-slate-500">Loading hero images...</div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {images.map((item, index) => (
+              <article key={item.id} className="overflow-hidden rounded-xl border border-yellow-200 bg-white shadow-sm">
+                <div className="relative aspect-video bg-slate-100">
+                  <img src={item.imageUrl} alt={`Hero banner ${index + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/92 px-2 py-1 text-xs font-black text-green-700"><CheckCircle2 size={13} /> Img {index + 1}</span>
+                </div>
+                <div className="grid gap-3 p-3">
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-wide text-slate-500">
+                    Order
+                    <input type="number" min="1" max="5" value={item.order || index + 1} onChange={(event) => updateOrder(item, event.target.value)} className="min-h-12 rounded-lg border border-slate-200 px-3 text-base outline-none focus:border-tdp-yellow" />
+                  </label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => toggleActive(item)} className={`min-h-12 flex-1 rounded-lg px-3 text-sm font-black ${item.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                    <button type="button" onClick={() => remove(item)} className="grid min-h-12 w-12 place-items-center rounded-lg bg-red-50 text-tdp-red" aria-label="Delete image">
+                      <Trash2 size={17} />
+                    </button>
                   </div>
-                )}
+                  <p className="break-all text-[11px] font-semibold text-slate-400">{item.imagePath || formatFileSize(0)}</p>
+                </div>
+              </article>
+            ))}
+            {!images.length && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center font-bold text-slate-500 sm:col-span-2 xl:col-span-5">
+                No hero images uploaded yet.
               </div>
-              <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Banner title (optional)" value={slide.title_en || ''} onChange={(event) => updateSlide(slide.id, { title_en: event.target.value })} />
-              <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Banner subtitle (optional)" value={slide.subtitle_en || ''} onChange={(event) => updateSlide(slide.id, { subtitle_en: event.target.value })} />
-              <input className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Alt text for accessibility" value={slide.alt_en || ''} onChange={(event) => updateSlide(slide.id, { alt_en: event.target.value })} />
-              <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
-                <input type="number" min="1" className="min-h-12 rounded-xl border border-slate-200 px-4 outline-none focus:border-tdp-yellow" placeholder="Order" value={slide.order || index + 1} onChange={(event) => updateSlide(slide.id, { order: Number(event.target.value) })} />
-                <label className="flex min-h-12 items-center gap-2 rounded-xl bg-slate-50 px-4 text-sm font-bold text-slate-700">
-                  <input type="checkbox" checked={slide.isActive !== false} onChange={(event) => updateSlide(slide.id, { isActive: event.target.checked })} /> Active on website
-                </label>
-              </div>
-            </div>
-            <button type="button" onClick={() => removeSlide(slide.id)} className="grid h-12 w-12 place-items-center rounded-xl bg-red-50 text-tdp-red" aria-label="Delete hero banner"><Trash2 size={18} /></button>
-          </section>
-        ))}
-      </div>
-
-      {!slides.length && !isLoading && (
-        <div className="rounded-2xl border border-dashed border-yellow-300 bg-yellow-50 p-8 text-center">
-          <ImagePlus className="mx-auto mb-2 text-yellow-700" size={32} />
-          <p className="font-black text-yellow-950">No {activePage.label} hero banners yet.</p>
-          <p className="mt-1 text-sm font-semibold text-yellow-800">Add a banner so the public page uses admin images instead of default placeholders.</p>
-        </div>
-      )}
-
-      <div className="sticky bottom-4 z-10 flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white/92 p-3 shadow-xl backdrop-blur">
-        <button type="button" onClick={addSlide} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-800"><Plus size={18} />Add Banner</button>
-        <button type="button" onClick={reset} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-700"><RotateCcw size={18} />Reset</button>
-        <button type="button" onClick={save} disabled={imageUploading || saving} className="inline-flex items-center gap-2 rounded-xl bg-tdp-red px-5 py-3 font-bold text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"><Save size={18} />{saving ? 'Saving...' : `Save ${activePage.label} Hero`}</button>
-      </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
+};
+
+const nextOrder = (items) => {
+  const used = new Set(items.map((item) => Number(item.order)).filter(Boolean));
+  for (let index = 1; index <= MAX_HERO_IMAGES; index += 1) {
+    if (!used.has(index)) return index;
+  }
+  return Math.min(MAX_HERO_IMAGES, items.length + 1);
 };
 
 export default ManageHero;

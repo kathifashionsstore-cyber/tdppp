@@ -4,17 +4,12 @@ import { DEFAULT_HERO_IMAGE } from '@/utils/constants';
 import { getLangField } from '@/utils/helpers';
 import { useLanguage } from '@/hooks/useLanguage';
 
-const fallbackSlides = [
-  { id: 'default-mla', image: '/mla/aravinda-babu.jpg', alt_en: 'Dr. Chadalavada Aravinda Babu' }
-];
-
 const MlaHero = ({ slides = [] }) => {
   const { language } = useLanguage();
   const activeSlides = useMemo(() => {
-    const rows = (slides || [])
+    return (slides || [])
       .filter((slide) => (slide?.image || slide?.imageMobile) && slide.isActive !== false)
       .sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99));
-    return rows.length ? rows : fallbackSlides;
   }, [slides]);
   const [index, setIndex] = useState(0);
   const [ready, setReady] = useState(false);
@@ -59,6 +54,12 @@ const MlaHero = ({ slides = [] }) => {
     touchCurrent.current = null;
   };
 
+  if (!activeSlides.length) {
+    return (
+      <section className="relative h-[42vh] overflow-hidden bg-[linear-gradient(135deg,#ffd700_0%,#f5a623_42%,#cc0000_100%)] md:h-[55vh] lg:h-[70vh]" aria-label="Default TDP hero background" />
+    );
+  }
+
   return (
     <section className="relative h-[42vh] overflow-hidden bg-slate-950 md:h-[55vh] lg:h-[70vh]" style={{ touchAction: 'pan-y' }}>
       <div className="absolute inset-0" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
@@ -71,7 +72,7 @@ const MlaHero = ({ slides = [] }) => {
                 src={slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE}
                 alt={getLangField(slide, 'alt', language) || getLangField(slide, 'title', language) || slide.label || 'Narasaraopet TDP hero slide'}
                 loading={slideIndex === 0 ? 'eager' : 'lazy'}
-                fetchpriority={slideIndex === 0 ? 'high' : 'auto'}
+                fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
                 decoding="async"
                 width="1600"
                 height="900"
