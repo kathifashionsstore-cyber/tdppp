@@ -6,22 +6,33 @@ import PageHero from './PageHero';
 import { useCollection } from '@/hooks/useFirestore';
 import { formatDate } from '@/utils/dateUtils';
 import { excerpt, getLangField, sanitizeHtml, stripHtml, toDate } from '@/utils/helpers';
+import { formatCountdown, getCurrentEntryIndex, getLiveEntries, selectTodaySchedule } from '@/utils/scheduleUtils';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const DailyWork = () => {
   const { language } = useLanguage();
   const [now, setNow] = useState(() => new Date());
+  const [refreshSeconds, setRefreshSeconds] = useState(300);
   const { data: schedules = [], isLoading: scheduleLoading } = useCollection('dailySchedules', { publishedOnly: true, orderByField: 'date', orderDirection: 'desc' });
   const { data: workItems = [], isLoading: workLoading } = useCollection('dailyWork', { publishedOnly: true, orderByField: 'date', orderDirection: 'desc' });
+
+  useEffect(() => {
+    const reloadTimer = window.setInterval(() => window.location.reload(), 300_000);
+    const countdownTimer = window.setInterval(() => {
+      setRefreshSeconds((seconds) => (seconds <= 1 ? 300 : seconds - 1));
+    }, 1_000);
+    return () => {
+      window.clearInterval(reloadTimer);
+      window.clearInterval(countdownTimer);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const todaySchedule = useMemo(() => schedules
-    .map((item) => ({ ...item, date: toDate(item.date) || new Date() }))
-    .find((item) => isSameDay(item.date, now)), [now, schedules]);
+  const todaySchedule = useMemo(() => selectTodaySchedule(schedules, now), [now, schedules]);
   const liveEntries = useMemo(() => todaySchedule ? getLiveEntries(todaySchedule, now) : [], [now, todaySchedule]);
   const shareText = useMemo(() => todaySchedule ? buildWhatsAppText(todaySchedule, liveEntries) : '', [liveEntries, todaySchedule]);
 
@@ -36,6 +47,9 @@ const DailyWork = () => {
 
   return (
     <>
+      <div className="fixed bottom-20 right-3 z-40 rounded-full border border-yellow-200 bg-white/95 px-3 py-2 text-xs font-black text-slate-700 shadow-lg backdrop-blur md:bottom-4 md:right-4">
+        Refreshing in {formatCountdown(refreshSeconds)}
+      </div>
       <PageHero page="dailywork" title="Daily Work" subtitle="Development, welfare, meetings, visits, and constituency updates" />
 
       <section className="bg-white py-8 md:py-12">
@@ -81,6 +95,12 @@ const ScheduleHeader = ({ schedule, language, now }) => {
   const date = toDate(schedule.date) || now;
   return (
     <header className="bg-slate-950 p-5 text-white md:p-7">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-tdp-yellow">Today&apos;s Schedule - Live</p>
+        <span className="inline-flex items-center gap-2 rounded-full bg-red-500/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-red-200">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /> Live
+        </span>
+      </div>
       <p className="telugu text-2xl font-black leading-relaxed text-tdp-yellow md:text-3xl">{getLangField(schedule, 'greeting', language) || schedule.greeting_te || schedule.greeting_en}</p>
       <div className="mt-2 flex flex-wrap gap-3 text-sm font-bold text-white/72">
         <span className="inline-flex items-center gap-2"><CalendarDays size={16} /> {formatDate(date, 'dd/MM/yyyy')}</span>
@@ -98,8 +118,8 @@ const ScheduleTimeline = ({ entries, language }) => {
   const [carTop, setCarTop] = useState(18);
   const completedCount = entries.filter((entry) => entry.liveStatus === 'completed').length;
   const activeIndex = entries.findIndex((entry) => entry.liveStatus === 'in-progress');
-  const currentIndex = activeIndex >= 0 ? activeIndex : completedCount >= entries.length ? entries.length - 1 : Math.max(0, completedCount - 1);
-  const showCar = activeIndex >= 0 || completedCount >= entries.length;
+  const currentIndex = getCurrentEntryIndex(entries);
+  const showCar = currentIndex >= 0 && (activeIndex >= 0 || completedCount > 0);
 
   useEffect(() => {
     const measure = () => {
@@ -126,12 +146,12 @@ const ScheduleTimeline = ({ entries, language }) => {
       <div ref={lineRef} className="relative ml-2 grid gap-5 border-l-4 border-slate-200 pl-8 md:ml-5 md:pl-10">
         <motion.div className="absolute -left-1 top-0 w-1 rounded-full bg-tdp-yellow" animate={{ height: fillHeight }} transition={{ duration: 1, ease: 'easeInOut' }} />
         {showCar && (
-          <motion.div className="absolute -left-[18px] z-20 grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-slate-950 text-tdp-yellow shadow-lg md:-left-[20px]" animate={{ top: carTop - 16 }} transition={{ duration: 1, ease: 'easeInOut' }} aria-hidden="true">
-            <Car size={22} />
+          <motion.div className="daily-work-car absolute -left-[18px] z-20 grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-slate-950 text-tdp-yellow shadow-lg md:-left-[20px]" animate={{ top: carTop - 18 }} transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }} aria-hidden="true">
+            <Car size={23} />
           </motion.div>
         )}
         {entries.map((entry, index) => (
-          <motion.article key={`${entry.time}-${index}`} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.32, delay: Math.min(index * 0.06, 0.24) }} className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <motion.article key={`${entry.time}-${index}`} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.32, delay: Math.min(index * 0.06, 0.24) }} className={`relative rounded-lg border p-4 shadow-sm transition ${entry.liveStatus === 'in-progress' ? 'border-yellow-300 bg-yellow-50 shadow-yellow' : 'border-slate-200 bg-white'}`}>
             <span ref={(node) => { dotRefs.current[index] = node; }} className={`absolute -left-[3.05rem] top-5 z-10 grid h-7 w-7 place-items-center rounded-full border-4 border-white shadow-sm ${statusDotClass(entry.liveStatus)}`}>
               {entry.liveStatus === 'completed' && <CheckCircle2 size={15} />}
               {entry.liveStatus === 'in-progress' && <span className="h-3 w-3 animate-pulse rounded-full bg-tdp-red" />}
@@ -143,7 +163,11 @@ const ScheduleTimeline = ({ entries, language }) => {
                 <h3 className={`telugu mt-1 text-xl font-black leading-8 ${entry.liveStatus === 'completed' ? 'text-slate-500 line-through decoration-2' : 'text-slate-950'}`}>{getLangField(entry, 'activity', language) || entry.activity_te || entry.activity_en}</h3>
                 {(getLangField(entry, 'location', language) || entry.location_te || entry.location_en) && <p className="mt-2 inline-flex items-center gap-2 text-sm font-bold text-slate-500"><MapPin size={15} /> {getLangField(entry, 'location', language) || entry.location_te || entry.location_en}</p>}
               </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.08em] ${statusBadgeClass(entry.liveStatus)}`}>{entry.liveStatus === 'in-progress' ? 'Now' : entry.liveStatus}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {entry.liveStatus === 'in-progress' && <span className="h-2.5 w-2.5 animate-ping rounded-full bg-tdp-red" aria-hidden="true" />}
+                <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.08em] ${statusBadgeClass(entry.liveStatus)}`}>{entry.liveStatus === 'in-progress' ? 'Now' : entry.liveStatus}</span>
+                {entry.liveStatus === 'in-progress' && <span className="animate-pulse rounded-full bg-tdp-red px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-white">Live</span>}
+              </div>
             </div>
           </motion.article>
         ))}
@@ -201,54 +225,6 @@ const WorkPhotoCard = ({ item, index, language }) => {
   );
 };
 
-const getLiveEntries = (schedule, now) => {
-  const entries = [...(schedule.entries || [])].sort((a, b) => (Number(a.order) || 99) - (Number(b.order) || 99));
-  const scheduleDate = toDate(schedule.date) || now;
-  const isToday = isSameDay(scheduleDate, now);
-  const isPast = startOfDay(scheduleDate) < startOfDay(now);
-  const isFuture = startOfDay(scheduleDate) > startOfDay(now);
-  const nowMinutes = (now.getHours() * 60) + now.getMinutes();
-  const entryMinutes = inferEntryMinutes(entries);
-  const currentIndex = entryMinutes.reduce((active, minutes, index) => {
-    return minutes != null && minutes <= nowMinutes ? index : active;
-  }, -1);
-
-  return entries.map((entry, index) => {
-    let liveStatus = 'upcoming';
-    if (isPast || (isToday && index < currentIndex)) liveStatus = 'completed';
-    else if (!isFuture && isToday && index === currentIndex) liveStatus = 'in-progress';
-    return { ...entry, liveStatus };
-  });
-};
-
-const inferEntryMinutes = (entries) => {
-  let lastMinutes = -1;
-  return entries.map((entry) => {
-    const raw = parseTimeToMinutes(entry.time);
-    if (raw == null) return null;
-    let minutes = raw;
-    if (!/am|pm/i.test(entry.time || '')) {
-      while (minutes <= lastMinutes && minutes + 720 < 1440) minutes += 720;
-    }
-    lastMinutes = Math.max(lastMinutes, minutes);
-    return minutes;
-  });
-};
-
-const parseTimeToMinutes = (value = '') => {
-  const text = String(value || '').trim().toLowerCase();
-  if (!text) return null;
-  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
-  if (!match) return null;
-  let hours = Number(match[1]);
-  const minutes = Number(match[2] || 0);
-  const meridian = match[3];
-  if (meridian === 'pm' && hours < 12) hours += 12;
-  if (meridian === 'am' && hours === 12) hours = 0;
-  if (hours > 23 || minutes > 59) return null;
-  return (hours * 60) + minutes;
-};
-
 const buildWhatsAppText = (schedule, entries) => {
   const date = toDate(schedule.date) || new Date();
   const lines = [
@@ -273,13 +249,6 @@ const statusBadgeClass = (status) => {
   if (status === 'completed') return 'bg-green-100 text-green-700';
   if (status === 'in-progress') return 'bg-red-100 text-tdp-red';
   return 'bg-slate-100 text-slate-500';
-};
-
-const isSameDay = (left, right) => startOfDay(left).getTime() === startOfDay(right).getTime();
-
-const startOfDay = (value) => {
-  const date = toDate(value) || new Date();
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 };
 
 export default DailyWork;

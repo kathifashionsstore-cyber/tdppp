@@ -72,7 +72,7 @@ const MlaHero = ({ slides = [] }) => {
                 src={slide.image || slide.imageMobile || DEFAULT_HERO_IMAGE}
                 alt={getLangField(slide, 'alt', language) || getLangField(slide, 'title', language) || slide.label || 'Narasaraopet TDP hero slide'}
                 loading={slideIndex === 0 ? 'eager' : 'lazy'}
-                fetchPriority={slideIndex === 0 ? 'high' : 'auto'}
+                fetchpriority={slideIndex === 0 ? 'high' : 'auto'}
                 decoding="async"
                 width="1600"
                 height="900"

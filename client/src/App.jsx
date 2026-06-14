@@ -10,6 +10,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 const Home = lazy(() => import('@/pages/public/Home'));
 const About = lazy(() => import('@/pages/public/About'));
 const DailyWork = lazy(() => import('@/pages/public/DailyWork'));
+const TVDisplay = lazy(() => import('@/pages/public/TVDisplay'));
 const Gallery = lazy(() => import('@/pages/public/Gallery'));
 const Schemes = lazy(() => import('@/pages/public/Schemes'));
 const Super6 = lazy(() => import('@/pages/public/Super6'));
@@ -58,6 +59,7 @@ const App = () => {
         <ErrorBoundary resetKey={location.pathname}>
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
+              <Route path="/tv" element={<TVDisplay />} />
               <Route element={<Layout />}>
                 <Route index element={<Page><Home /></Page>} />
                 <Route path="about" element={<Navigate to="/narasaraopet" replace />} />

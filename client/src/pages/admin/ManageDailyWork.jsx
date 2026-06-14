@@ -7,7 +7,7 @@ import { useCollection, useCrud } from '@/hooks/useFirestore';
 import { formatDate } from '@/utils/dateUtils';
 import { confirmToast, toastError, toastSuccess } from '@/utils/toastUtils.jsx';
 import { toDate } from '@/utils/helpers';
-import { toImgBBUploadMeta } from '@/utils/imageUploadMeta';
+import { toImgBBUploadMeta, toImgBBUploadMetaList } from '@/utils/imageUploadMeta';
 
 const DRAFT_KEY = 'daily-work-schedule-draft';
 const PHOTO_DRAFT_KEY = 'daily-work-photo-draft';
@@ -22,6 +22,7 @@ const createEntry = (order = 1) => ({
   activity_te: '',
   location_en: '',
   location_te: '',
+  tvPhotos: [],
   order
 });
 
@@ -57,6 +58,7 @@ const ManageDailyWork = () => {
   const [scheduleForm, setScheduleForm] = useState(emptySchedule);
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleUploading, setScheduleUploading] = useState(false);
+  const [entryUploading, setEntryUploading] = useState(false);
   const [lastAutosave, setLastAutosave] = useState('');
   const [editingPhoto, setEditingPhoto] = useState(null);
   const [photoForm, setPhotoForm] = useState(emptyPhoto);
@@ -91,6 +93,44 @@ const ManageDailyWork = () => {
   }));
   const updatePhoto = (key, value) => setPhotoForm((state) => ({ ...state, [key]: value }));
 
+  const updateEntryTvPhotoUrls = (index, urls) => setScheduleForm((state) => ({
+    ...state,
+    entries: state.entries.map((entry, entryIndex) => {
+      if (entryIndex !== index) return entry;
+      const existing = normalizeTvPhotos(entry.tvPhotos);
+      const nextPhotos = (urls || []).map((url) => existing.find((photo) => photo.url === url || photo.imageUrl === url || photo.displayUrl === url) || {
+        url,
+        imageUrl: url,
+        caption: entry.activity_te || entry.activity_en || ''
+      });
+      return { ...entry, tvPhotos: nextPhotos.slice(0, 10) };
+    })
+  }));
+
+  const appendEntryTvPhotos = (index, uploaded) => {
+    const metadata = toImgBBUploadMetaList(uploaded).map((item) => ({
+      ...item,
+      url: item.imageUrl || item.displayUrl || item.url || '',
+      caption: ''
+    })).filter((item) => item.url);
+    if (!metadata.length) return;
+
+    setScheduleForm((state) => ({
+      ...state,
+      entries: state.entries.map((entry, entryIndex) => {
+        if (entryIndex !== index) return entry;
+        const existing = normalizeTvPhotos(entry.tvPhotos);
+        const merged = [...metadata, ...existing]
+          .filter((photo, photoIndex, allPhotos) => allPhotos.findIndex((item) => item.url === photo.url) === photoIndex)
+          .slice(0, 10);
+        if (merged.length === 10 && existing.length + metadata.length > 10) {
+          toast('Maximum 10 TV photos per schedule entry');
+        }
+        return { ...entry, tvPhotos: merged };
+      })
+    }));
+  };
+
   const addEntry = () => setScheduleForm((state) => ({ ...state, entries: [...state.entries, createEntry(state.entries.length + 1)] }));
   const removeEntry = (index) => setScheduleForm((state) => ({
     ...state,
@@ -121,6 +161,7 @@ const ManageDailyWork = () => {
         ...createEntry(index + 1),
         ...entry,
         ...splitTime(entry.time),
+        tvPhotos: normalizeTvPhotos(entry.tvPhotos),
         order: entry.order || index + 1
       }))
     });
@@ -129,7 +170,7 @@ const ManageDailyWork = () => {
 
   const saveSchedule = async (event) => {
     event.preventDefault();
-    if (scheduleUploading) return toast.error('Please wait until the top image upload finishes');
+    if (scheduleUploading || entryUploading) return toast.error('Please wait until image upload finishes');
     const entries = scheduleForm.entries
       .map((entry, index) => {
         const time = formatEntryTime(entry);
@@ -142,6 +183,7 @@ const ManageDailyWork = () => {
           activity_te: entry.activity_te || activity,
           location_en: entry.location_en || location,
           location_te: entry.location_te || location,
+          tvPhotos: normalizeTvPhotos(entry.tvPhotos).slice(0, 10),
           status: 'upcoming',
           order: Number(entry.order) || index + 1
         };
@@ -338,6 +380,27 @@ const ManageDailyWork = () => {
                     Location
                     <input value={entry.location_te || entry.location_en || ''} onChange={(event) => { updateEntry(index, 'location_te', event.target.value); updateEntry(index, 'location_en', event.target.value); }} className="telugu min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
                   </label>
+                  <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-yellow-900"><Camera size={15} /> Work Done Photos</p>
+                        <p className="mt-1 text-sm font-semibold text-yellow-900/75">For the TV display right panel. Upload up to 10 photos for this event.</p>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-yellow-900">{normalizeTvPhotos(entry.tvPhotos).length}/10</span>
+                    </div>
+                    <ImageUploader
+                      label={`TV Photos - Entry ${index + 1}`}
+                      value={normalizeTvPhotos(entry.tvPhotos).map((photo) => photo.url)}
+                      multiple
+                      maxSizeKB={300}
+                      accept="image/*"
+                      storageFolder="daily-work-tv"
+                      aspectRatio="16/9"
+                      onUploadStateChange={setEntryUploading}
+                      onChange={(urls) => updateEntryTvPhotoUrls(index, urls)}
+                      onUploadComplete={(uploaded) => appendEntryTvPhotos(index, uploaded)}
+                    />
+                  </div>
                 </article>
               ))}
             </div>
@@ -348,7 +411,7 @@ const ManageDailyWork = () => {
             <textarea value={scheduleForm.closingNote_te || ''} onChange={(event) => updateSchedule('closingNote_te', event.target.value)} className="telugu min-h-32 rounded-xl border border-slate-200 px-4 py-3 text-base outline-none focus:border-tdp-yellow" placeholder="Who should attend paragraph" />
           </label>
 
-          <button disabled={scheduleSaving || scheduleUploading} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 text-base font-black uppercase tracking-[0.06em] text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
+          <button disabled={scheduleSaving || scheduleUploading || entryUploading} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 text-base font-black uppercase tracking-[0.06em] text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
             <Save size={18} /> {scheduleSaving ? 'Publishing...' : 'Publish Today\'s Schedule'}
           </button>
           <button type="button" onClick={resetSchedule} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 font-black text-slate-700"><XCircle size={18} /> Reset Schedule Form</button>
@@ -464,5 +527,20 @@ const formatEntryTime = (entry) => {
   if (hourNumber === 0) hourNumber = 12;
   return `${hourNumber}:${minute || '00'} ${entry.meridiem || 'AM'}`;
 };
+
+const normalizeTvPhotos = (photos = []) => (Array.isArray(photos) ? photos : [])
+  .map((photo) => {
+    if (!photo) return null;
+    if (typeof photo === 'string') return { url: photo, imageUrl: photo, caption: '' };
+    const url = photo.url || photo.imageUrl || photo.displayUrl || photo.thumbUrl || '';
+    if (!url) return null;
+    return {
+      ...photo,
+      url,
+      imageUrl: photo.imageUrl || url,
+      caption: photo.caption || ''
+    };
+  })
+  .filter(Boolean);
 
 export default ManageDailyWork;
