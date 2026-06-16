@@ -20,6 +20,7 @@ const FestivalBanner = () => {
               <h2 className="font-telugu text-2xl font-bold">{getLangField(activeBanner, 'title', language)}</h2>
               <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-white/85">{getLangField(activeBanner, 'message', language)}</p>
               <a href="tel:9398724704" className="mt-4 block text-sm font-semibold text-white/75">Website made by WayzenTech - 9398724704</a>
+              <img src="/logo.webp" alt="TDP Narasaraopet" className="mx-auto mt-5 h-14 w-auto rounded-full bg-white object-contain p-1 shadow-[0_0_24px_rgba(255,215,0,0.45)]" />
               <button type="button" onClick={closeBanner} className="mx-auto mt-5 inline-flex min-h-12 w-full max-w-md items-center justify-center gap-2 rounded-lg bg-tdp-yellow px-5 py-3 text-sm font-black uppercase tracking-[0.08em] text-tdp-navy shadow-[0_0_24px_rgba(255,215,0,0.45)] transition hover:-translate-y-0.5 hover:shadow-[0_0_34px_rgba(255,215,0,0.65)]">
                 <CheckCircle2 size={18} /> Continue to Website <ArrowRight size={18} />
               </button>

@@ -26,8 +26,13 @@ const AdminSidebar = () => {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col bg-[#111827] text-white shadow-2xl md:flex">
       <div className="border-b border-white/10 p-5">
-        <p className="text-xl font-black text-tdp-yellow">TDP Admin</p>
-        <p className="text-xs text-white/60">Content control center</p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.webp" alt="TDP Narasaraopet" className="h-11 w-11 rounded-full bg-white object-contain p-1 shadow-yellow" />
+          <div>
+            <p className="text-xl font-black text-tdp-yellow">TDP Admin</p>
+            <p className="text-xs text-white/60">Content control center</p>
+          </div>
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-3">
         {items.map(({ label, path, icon: Icon }) => (

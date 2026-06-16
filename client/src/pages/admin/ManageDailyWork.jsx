@@ -18,6 +18,10 @@ const createEntry = (order = 1) => ({
   timeValue: '',
   meridiem: 'AM',
   time: '',
+  endTimeValue: '',
+  endMeridiem: 'AM',
+  endTime: '',
+  status: 'upcoming',
   activity_en: '',
   activity_te: '',
   location_en: '',
@@ -161,6 +165,7 @@ const ManageDailyWork = () => {
         ...createEntry(index + 1),
         ...entry,
         ...splitTime(entry.time),
+        ...splitTime(entry.endTime, 'end'),
         tvPhotos: normalizeTvPhotos(entry.tvPhotos),
         order: entry.order || index + 1
       }))
@@ -174,17 +179,19 @@ const ManageDailyWork = () => {
     const entries = scheduleForm.entries
       .map((entry, index) => {
         const time = formatEntryTime(entry);
+        const endTime = formatEntryTime(entry, 'end');
         const activity = entry.activity_te || entry.activity_en || '';
         const location = entry.location_te || entry.location_en || '';
         return {
           ...entry,
           time,
+          endTime,
           activity_en: entry.activity_en || activity,
           activity_te: entry.activity_te || activity,
           location_en: entry.location_en || location,
           location_te: entry.location_te || location,
           tvPhotos: normalizeTvPhotos(entry.tvPhotos).slice(0, 10),
-          status: 'upcoming',
+          status: normalizeEntryStatus(entry.status),
           order: Number(entry.order) || index + 1
         };
       })
@@ -359,9 +366,9 @@ const ManageDailyWork = () => {
                     <h3 className="font-black text-slate-950">Entry {index + 1}</h3>
                     <button type="button" onClick={() => removeEntry(index)} disabled={scheduleForm.entries.length === 1} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 font-black text-red-700 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={17} /> Delete Entry</button>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                  <div className="grid gap-3 md:grid-cols-[1fr_120px_1fr_120px]">
                     <label className="grid gap-1 text-sm font-black text-slate-700">
-                      Time
+                      Start Time
                       <input type="time" value={entry.timeValue || ''} onChange={(event) => updateEntry(index, 'timeValue', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
                     </label>
                     <label className="grid gap-1 text-sm font-black text-slate-700">
@@ -371,7 +378,26 @@ const ManageDailyWork = () => {
                         <option value="PM">PM</option>
                       </select>
                     </label>
+                    <label className="grid gap-1 text-sm font-black text-slate-700">
+                      End Time
+                      <input type="time" value={entry.endTimeValue || ''} onChange={(event) => updateEntry(index, 'endTimeValue', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+                    </label>
+                    <label className="grid gap-1 text-sm font-black text-slate-700">
+                      End AM/PM
+                      <select value={entry.endMeridiem || 'AM'} onChange={(event) => updateEntry(index, 'endMeridiem', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow">
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </label>
                   </div>
+                  <label className="grid gap-1 text-sm font-black text-slate-700">
+                    TV Status
+                    <select value={entry.status || 'upcoming'} onChange={(event) => updateEntry(index, 'status', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow">
+                      <option value="upcoming">Upcoming</option>
+                      <option value="in-progress">In progress / now</option>
+                      <option value="completed">Completed with photos</option>
+                    </select>
+                  </label>
                   <label className="grid gap-1 text-sm font-black text-slate-700">
                     Activity
                     <input value={entry.activity_te || entry.activity_en || ''} onChange={(event) => { updateEntry(index, 'activity_te', event.target.value); updateEntry(index, 'activity_en', event.target.value); }} className="telugu min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
@@ -505,7 +531,7 @@ const inputToDate = (value) => {
   return new Date(year, (month || 1) - 1, day || 1);
 };
 
-const splitTime = (value = '') => {
+const splitTime = (value = '', prefix = '') => {
   const text = String(value || '').trim();
   const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
   if (!match) return {};
@@ -513,19 +539,34 @@ const splitTime = (value = '') => {
   const minutes = Number(match[2] || 0);
   const meridiem = (match[3] || (hours >= 12 ? 'PM' : 'AM')).toUpperCase();
   if (hours > 12) hours -= 12;
-  return {
+  const fields = {
     timeValue: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
     meridiem
   };
+  if (!prefix) return fields;
+  return {
+    [`${prefix}TimeValue`]: fields.timeValue,
+    [`${prefix}Meridiem`]: fields.meridiem
+  };
 };
 
-const formatEntryTime = (entry) => {
-  if (!entry.timeValue) return entry.time || '';
-  const [hour, minute] = entry.timeValue.split(':');
+const formatEntryTime = (entry, prefix = '') => {
+  const valueKey = prefix ? `${prefix}TimeValue` : 'timeValue';
+  const meridiemKey = prefix ? `${prefix}Meridiem` : 'meridiem';
+  const fallbackKey = prefix ? `${prefix}Time` : 'time';
+  if (!entry[valueKey]) return entry[fallbackKey] || '';
+  const [hour, minute] = entry[valueKey].split(':');
   let hourNumber = Number(hour || 0);
   if (hourNumber > 12) hourNumber -= 12;
   if (hourNumber === 0) hourNumber = 12;
-  return `${hourNumber}:${minute || '00'} ${entry.meridiem || 'AM'}`;
+  return `${hourNumber}:${minute || '00'} ${entry[meridiemKey] || 'AM'}`;
+};
+
+const normalizeEntryStatus = (status = 'upcoming') => {
+  const value = String(status || '').toLowerCase().trim();
+  if (['completed', 'complete', 'done'].includes(value)) return 'completed';
+  if (['in-progress', 'inprogress', 'progress', 'current', 'now', 'live'].includes(value)) return 'in-progress';
+  return 'upcoming';
 };
 
 const normalizeTvPhotos = (photos = []) => (Array.isArray(photos) ? photos : [])

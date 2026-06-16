@@ -1,13 +1,9 @@
-import BicycleIcon from './BicycleIcon';
-
 export const LoadingSpinner = ({ label = 'Loading...', fullScreen = false }) => (
   <div className={`flex items-center justify-center ${fullScreen ? 'fixed inset-0 z-[120] bg-white/96 backdrop-blur' : 'min-h-40'}`}>
     <div className="text-center">
-      <div className="relative mx-auto h-16 w-36 overflow-hidden">
-        <div className="absolute bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-tdp-yellow to-transparent" />
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 animate-loader-cycle">
-          <BicycleIcon size={58} color="#CC0000" opacity={1} />
-        </div>
+      <div className="relative mx-auto grid h-20 w-20 place-items-center rounded-full bg-white shadow-yellow ring-4 ring-yellow-200/70">
+        <span className="absolute inset-0 rounded-full border-4 border-transparent border-t-tdp-yellow animate-spin" />
+        <img src="/logo.webp" alt="TDP Narasaraopet" className="animate-loader-logo h-14 w-14 object-contain" />
       </div>
       <p className="mt-2 text-sm font-black text-tdp-navy">{label}</p>
     </div>

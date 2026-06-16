@@ -115,11 +115,11 @@ const ScheduleHeader = ({ schedule, language, now }) => {
 const ScheduleTimeline = ({ entries, language }) => {
   const lineRef = useRef(null);
   const dotRefs = useRef([]);
-  const [carTop, setCarTop] = useState(18);
+  const [cycleTop, setCycleTop] = useState(18);
   const completedCount = entries.filter((entry) => entry.liveStatus === 'completed').length;
   const activeIndex = entries.findIndex((entry) => entry.liveStatus === 'in-progress');
   const currentIndex = getCurrentEntryIndex(entries);
-  const showCar = currentIndex >= 0 && (activeIndex >= 0 || completedCount > 0);
+  const showCycle = currentIndex >= 0 && (activeIndex >= 0 || completedCount > 0);
 
   useEffect(() => {
     const measure = () => {
@@ -128,7 +128,7 @@ const ScheduleTimeline = ({ entries, language }) => {
       if (!line || !dot) return;
       const lineBox = line.getBoundingClientRect();
       const dotBox = dot.getBoundingClientRect();
-      setCarTop(Math.max(18, dotBox.top - lineBox.top + (dotBox.height / 2)));
+      setCycleTop(Math.max(18, dotBox.top - lineBox.top + (dotBox.height / 2)));
     };
     measure();
     window.addEventListener('resize', measure);
@@ -139,14 +139,14 @@ const ScheduleTimeline = ({ entries, language }) => {
     return <div className="p-6 text-center font-bold text-slate-500">No schedule entries have been added yet.</div>;
   }
 
-  const fillHeight = completedCount >= entries.length ? '100%' : showCar ? `${Math.max(0, carTop)}px` : '0px';
+  const fillHeight = completedCount >= entries.length ? '100%' : showCycle ? `${Math.max(0, cycleTop)}px` : '0px';
 
   return (
     <div className="relative p-4 md:p-7">
       <div ref={lineRef} className="relative ml-2 grid gap-5 border-l-4 border-slate-200 pl-8 md:ml-5 md:pl-10">
         <motion.div className="absolute -left-1 top-0 w-1 rounded-full bg-tdp-yellow" animate={{ height: fillHeight }} transition={{ duration: 1, ease: 'easeInOut' }} />
-        {showCar && (
-          <motion.div className="daily-work-car absolute -left-[18px] z-20 grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-slate-950 text-tdp-yellow shadow-lg md:-left-[20px]" animate={{ top: carTop - 18 }} transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }} aria-hidden="true">
+        {showCycle && (
+          <motion.div className="daily-work-car absolute -left-[18px] z-20 grid h-9 w-9 place-items-center rounded-full border-2 border-white bg-slate-950 text-tdp-yellow shadow-lg md:-left-[20px]" animate={{ top: cycleTop - 18 }} transition={{ duration: 1.5, ease: [0.4, 0, 0.2, 1] }} aria-hidden="true">
             <Car size={23} />
           </motion.div>
         )}

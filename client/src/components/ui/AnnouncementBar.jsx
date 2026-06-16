@@ -24,7 +24,7 @@ const defaultAnnouncements = [
   }
 ];
 
-const AnnouncementBar = () => {
+const AnnouncementBar = ({ fixed = true, tv = false }) => {
   const { language } = useLanguage();
   const announcements = useMemo(() => defaultAnnouncements
     .map((item) => ({
@@ -37,10 +37,10 @@ const AnnouncementBar = () => {
   const marqueeItems = [...announcements, ...announcements];
 
   return (
-    <div className="announcement-bar fixed inset-x-0 top-0 z-[90] h-8 w-full overflow-hidden whitespace-nowrap text-[#1a1a1a] shadow-md md:h-9">
-      <a href={mobileCallLink} className="absolute inset-0 z-20 md:hidden" aria-label="Call WayzenTech" />
+    <div className={`announcement-bar ${fixed ? 'fixed inset-x-0 top-0 z-[90]' : 'relative z-20'} ${tv ? 'h-11' : 'h-8 md:h-9'} w-full overflow-hidden whitespace-nowrap text-[#1a1a1a] shadow-md`}>
+      {!tv && <a href={mobileCallLink} className="absolute inset-0 z-20 md:hidden" aria-label="Call WayzenTech" />}
       <div className="relative z-0 flex h-full w-full items-center overflow-hidden">
-        <div className="announcement-track text-[12px] font-black md:text-sm">
+        <div className={`announcement-track font-black ${tv ? 'text-base md:text-lg' : 'text-[12px] md:text-sm'}`}>
           {marqueeItems.map((item, index) => (
             <span key={`${item.id || item.text}-${index}`} className="inline-flex items-center gap-4 px-2">
               {item.linkUrl ? (

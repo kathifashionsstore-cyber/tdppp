@@ -1,13 +1,12 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Mail, MapPin, Phone, Tv, Youtube } from 'lucide-react';
-import BicycleIcon from '@/components/ui/BicycleIcon';
 
 const Footer = () => (
   <footer className="bg-tdp-navy pb-20 text-white md:pb-0">
     <div className="container-page grid gap-8 py-10 md:grid-cols-4">
       <div className="md:col-span-2">
         <div className="mb-4 flex items-center gap-3">
-          <BicycleIcon size={52} color="#FFD700" opacity={1} />
+          <img src="/logo.webp" alt="TDP Narasaraopet" className="h-14 w-auto rounded-full bg-white object-contain p-1 shadow-yellow" />
           <div>
             <p className="telugu text-xl font-black">నరసరావుపేట TDP</p>
             <p className="text-sm text-white/70">Dr. Chadalavada Aravinda Babu, MLA</p>

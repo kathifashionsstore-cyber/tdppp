@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Minus, Send, X } from 'lucide-react';
 import { useChatbot } from '@/hooks/useChatbot';
-import BicycleIcon from '@/components/ui/BicycleIcon';
 
 const Chatbot = () => {
   const [open, setOpen] = useState(false);
@@ -69,7 +68,7 @@ const Chatbot = () => {
                     />
                     <button type="button" onClick={() => submit()} className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-lg bg-tdp-yellow px-3 text-sm font-black text-tdp-navy shadow-yellow" aria-label="Send message">
                       <Send size={17} />
-                      <BicycleIcon size={24} color="#1a1a2e" opacity={1} />
+                      <LogoMark className="h-6 w-6" />
                     </button>
                   </div>
                 </div>
@@ -87,7 +86,7 @@ const Chatbot = () => {
           aria-label="Open Narasaraopet assistant chat"
         >
           <span className="chatbot-pulse relative grid h-12 w-12 place-items-center rounded-full border-2 border-tdp-yellow bg-[#0a0a2e] text-tdp-yellow shadow-[0_12px_32px_rgba(10,10,46,0.38)] md:h-14 md:w-14">
-            <BicycleIcon size={36} color="#FFD700" opacity={1} className="md:h-10 md:w-10" />
+            <LogoMark className="h-9 w-9 md:h-10 md:w-10" />
             <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-white bg-tdp-red px-1 text-[10px] font-black leading-none text-white">1</span>
           </span>
           <span className="hidden rounded-full bg-white px-3 py-2 text-sm font-black text-slate-900 shadow-lg ring-1 ring-yellow-200 md:inline">Chat</span>
@@ -101,7 +100,7 @@ const ChatHeader = ({ minimized, onMinimize, onClose }) => (
   <header className="flex min-h-[68px] items-center justify-between gap-3 bg-tdp-yellow px-4 py-3 text-tdp-navy">
     <div className="flex min-w-0 items-center gap-3">
       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/72 shadow-sm">
-        <BicycleIcon size={34} color="#1a1a2e" opacity={1} />
+        <LogoMark className="h-9 w-9" />
       </div>
       <div className="min-w-0">
         <p className="telugu truncate text-sm font-black">నరసరావుపేట సహాయకుడు</p>
@@ -150,8 +149,12 @@ const ChatMessage = ({ message }) => {
 
 const BotAvatar = () => (
   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-tdp-yellow text-tdp-navy shadow-sm">
-    <BicycleIcon size={24} color="#1a1a2e" opacity={1} />
+    <LogoMark className="h-6 w-6" />
   </span>
+);
+
+const LogoMark = ({ className = '' }) => (
+  <img src="/logo.webp" alt="" className={`object-contain ${className}`} />
 );
 
 const ChatLink = ({ link }) => {
