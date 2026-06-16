@@ -30,6 +30,7 @@ const TVDisplay = () => {
   const [slotIndex, setSlotIndex] = useState(0);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [loopHold, setLoopHold] = useState(false);
+  const photoIntervalRef = useRef(null);
   const { data: schedules = [], isLoading: schedulesLoading } = useCollection('dailySchedules', { publishedOnly: true, orderByField: 'date', orderDirection: 'desc' });
   const { data: heroImages = [] } = useCollection('heroImages_home', { activeOnly: true, orderByField: 'order', orderDirection: 'asc', limitCount: 10 });
 
@@ -72,28 +73,48 @@ const TVDisplay = () => {
   const activeSlot = playableSlots[slotIndex] || null;
   const displayPhotos = activeSlot?.photos?.length ? activeSlot.photos : fallbackPhotos;
   const activePhotoIndex = displayPhotos.length ? photoIndex % displayPhotos.length : 0;
+  const activeSlotKey = activeSlot?.key || '';
+  const currentPhotoCount = displayPhotos.length || 0;
+  const playableSlotCount = playableSlots.length;
+  const isLastPlaybackSlot = !activeSlot || slotIndex >= playableSlotCount - 1 || activeSlot.kind === 'current';
 
   useEffect(() => {
-    if (!playableSlots.length || loopHold) return undefined;
-    const slot = playableSlots[slotIndex];
-    if (!slot) return undefined;
-    const photos = slot.photos.length ? slot.photos : fallbackPhotos;
-    const atLastPhoto = photoIndex >= photos.length - 1;
-    const atLastSlot = slotIndex >= playableSlots.length - 1 || slot.kind === 'current';
-    const timer = window.setTimeout(() => {
-      if (!atLastPhoto) {
-        setPhotoIndex((index) => index + 1);
-        return;
-      }
-      if (!atLastSlot) {
-        setSlotIndex((index) => Math.min(index + 1, playableSlots.length - 1));
-        setPhotoIndex(0);
-        return;
-      }
-      setLoopHold(true);
+    setPhotoIndex(0);
+  }, [activeSlotKey]);
+
+  useEffect(() => {
+    if (photoIntervalRef.current) {
+      window.clearInterval(photoIntervalRef.current);
+      photoIntervalRef.current = null;
+    }
+
+    if (!activeSlotKey || loopHold || !currentPhotoCount) return undefined;
+
+    photoIntervalRef.current = window.setInterval(() => {
+      setPhotoIndex((prevIndex) => {
+        const totalPhotos = Math.max(currentPhotoCount, 1);
+        const nextIndex = (prevIndex + 1) % totalPhotos;
+        const slotPhotoSetFinished = totalPhotos <= 1 || nextIndex === 0;
+
+        if (slotPhotoSetFinished) {
+          if (isLastPlaybackSlot) {
+            setLoopHold(true);
+          } else {
+            setSlotIndex((index) => Math.min(index + 1, playableSlotCount - 1));
+          }
+        }
+
+        return nextIndex;
+      });
     }, PHOTO_HOLD_MS);
-    return () => window.clearTimeout(timer);
-  }, [fallbackPhotos, loopHold, photoIndex, playableSlots, slotIndex]);
+
+    return () => {
+      if (photoIntervalRef.current) {
+        window.clearInterval(photoIntervalRef.current);
+        photoIntervalRef.current = null;
+      }
+    };
+  }, [activeSlotKey, currentPhotoCount, isLastPlaybackSlot, loopHold, playableSlotCount]);
 
   useEffect(() => {
     if (!loopHold) return undefined;
