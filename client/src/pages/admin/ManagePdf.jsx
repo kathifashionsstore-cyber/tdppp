@@ -153,8 +153,7 @@ const ManagePdf = () => {
       // 2. Fetch the file via the proxy to generate page count & thumbnail
       toast.loading('Downloading file details...', { id: 'drive-loading' });
       
-      const clientBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_SERVER_URL ? `${import.meta.env.VITE_SERVER_URL}/api` : '');
-      const proxyUrl = clientBase ? `${clientBase}/pdf/proxy/${fileId}` : `/api/pdf/proxy/${fileId}`;
+      const proxyUrl = getPdfFileUrl({ filepath: `/api/pdf/proxy/${fileId}` });
       
       const response = await fetch(proxyUrl);
       if (!response.ok) {
