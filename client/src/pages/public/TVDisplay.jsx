@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, ImageOff, Radio, TimerReset } from 'lucide-react';
-import AnnouncementBar from '@/components/ui/AnnouncementBar';
-import { useCollection } from '@/hooks/useFirestore';
+import { CheckCircle2, Clock3, ImageOff, Play } from 'lucide-react';
+import { useRealtimeCollection, useRealtimeDoc } from '@/hooks/useFirestore';
 import {
-  formatCountdown,
   getEntryTvPhotos,
   getLiveEntries,
   parseTimeToMinutes,
@@ -11,42 +9,53 @@ import {
 } from '@/utils/scheduleUtils';
 import { getLangField, stripHtml, toDate } from '@/utils/helpers';
 
-const REFRESH_SECONDS = 600;
 const PHOTO_HOLD_MS = 3_000;
 const LOOP_HOLD_MS = 10_000;
-const CYCLE_MOVE_MS = 1_500;
+const CYCLE_MOVE_MS = 2_000;
 const FALLBACK_PHOTO = {
   url: '/og-image.png',
-  caption: 'TDP Narasaraopet',
+  caption: 'తెలుగుదేశం నరసరావుపేట',
   time: ''
 };
-const DEFAULT_HEADER_TITLE = 'నరసరావుపేట శాసనసభ్యులు డాక్టర్ చదలవాడ అరవింద బాబు';
-const DEFAULT_HEADER_SUBTITLE = 'నేటి పర్యటన వివరాలు';
-const WORK_IN_PROGRESS_TEXT = 'పని కొనసాగుతోంది...';
+const WORK_IN_PROGRESS_TEXT = 'పని జరుగుతోంది';
+const DONE_TEXT = 'ఈ రోజు కార్యక్రమాలు విజయవంతంగా పూర్తయ్యాయి';
+const DEFAULT_ATTENDANCE = {
+  count: 0,
+  target: 0,
+  label: 'ఇప్పటివరకు హాజరైన వ్యక్తులు',
+  show: true,
+  showWidget: true,
+  mlaName: 'డాక్టర్ చదలవాడ అరవింద బాబు',
+  constituencyName: 'నరసరావుపేట నియోజకవర్గం',
+  profileName: 'డాక్టర్ చదలవాడ అరవింద బాబు',
+  mlaPhotoUrl: '/logo.webp',
+  photoUrl: '/logo.webp',
+  tickerMessages: [
+    'ప్రజల కోసం... అభివృద్ధి కోసం... తెలుగుదేశం కోసం...',
+    'వెబ్‌సైట్ తయారు చేసింది వేజెన్‌టెక్ — 9398724704',
+    'డాక్టర్ చదలవాడ అరవింద బాబు — శాసనసభ్యులు, నరసరావుపేట, తెలుగుదేశం పార్టీ'
+  ]
+};
 
 const TVDisplay = () => {
   const [now, setNow] = useState(() => new Date());
-  const [refreshSeconds, setRefreshSeconds] = useState(REFRESH_SECONDS);
   const [slotIndex, setSlotIndex] = useState(0);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [loopHold, setLoopHold] = useState(false);
+  const [panelFlash, setPanelFlash] = useState(false);
   const photoIntervalRef = useRef(null);
-  const { data: schedules = [], isLoading: schedulesLoading } = useCollection('dailySchedules', { publishedOnly: true, orderByField: 'date', orderDirection: 'desc' });
-  const { data: heroImages = [] } = useCollection('heroImages_home', { activeOnly: true, orderByField: 'order', orderDirection: 'asc', limitCount: 10 });
+
+  const { data: schedules = [], isLoading: schedulesLoading } = useRealtimeCollection('dailySchedules', { publishedOnly: true, orderByField: 'date', orderDirection: 'desc' });
+  const { data: heroImages = [] } = useRealtimeCollection('heroImages_home', { activeOnly: true, orderByField: 'order', orderDirection: 'asc', limitCount: 10 });
+  const { data: attendanceDoc } = useRealtimeDoc('tvAttendance', 'today');
 
   useEffect(() => {
     const clockTimer = window.setInterval(() => setNow(new Date()), 1_000);
-    const reloadTimer = window.setInterval(() => window.location.reload(), REFRESH_SECONDS * 1_000);
-    const countdownTimer = window.setInterval(() => {
-      setRefreshSeconds((seconds) => (seconds <= 1 ? REFRESH_SECONDS : seconds - 1));
-    }, 1_000);
-    return () => {
-      window.clearInterval(clockTimer);
-      window.clearInterval(reloadTimer);
-      window.clearInterval(countdownTimer);
-    };
+    return () => window.clearInterval(clockTimer);
   }, []);
 
+  const attendance = useMemo(() => normalizeAttendance(attendanceDoc), [attendanceDoc]);
+  const tickerMessages = attendance.tickerMessages;
   const schedule = useMemo(() => selectTodaySchedule(schedules, now) || schedules[0] || null, [now, schedules]);
   const fallbackPhotos = useMemo(() => {
     const photos = heroImages
@@ -73,13 +82,21 @@ const TVDisplay = () => {
   const activeSlot = playableSlots[slotIndex] || null;
   const displayPhotos = activeSlot?.photos?.length ? activeSlot.photos : fallbackPhotos;
   const activePhotoIndex = displayPhotos.length ? photoIndex % displayPhotos.length : 0;
-  const activeSlotKey = activeSlot?.key || '';
+  const activeSlotKey = activeSlot?.key || 'fallback-home';
   const currentPhotoCount = displayPhotos.length || 0;
   const playableSlotCount = playableSlots.length;
-  const isLastPlaybackSlot = !activeSlot || slotIndex >= playableSlotCount - 1 || activeSlot.kind === 'current';
+  const isFallbackPlaylist = !activeSlot;
+  const isLastPlaybackSlot = !activeSlot || slotIndex >= playableSlotCount - 1;
 
   useEffect(() => {
     setPhotoIndex(0);
+  }, [activeSlotKey]);
+
+  useEffect(() => {
+    if (!activeSlotKey) return undefined;
+    setPanelFlash(true);
+    const timer = window.setTimeout(() => setPanelFlash(false), 300);
+    return () => window.clearTimeout(timer);
   }, [activeSlotKey]);
 
   useEffect(() => {
@@ -94,9 +111,12 @@ const TVDisplay = () => {
       setPhotoIndex((prevIndex) => {
         const totalPhotos = Math.max(currentPhotoCount, 1);
         const nextIndex = (prevIndex + 1) % totalPhotos;
-        const slotPhotoSetFinished = totalPhotos <= 1 || nextIndex === 0;
+        const slotFinished = totalPhotos <= 1 || nextIndex === 0;
 
-        if (slotPhotoSetFinished) {
+        if (slotFinished) {
+          if (isFallbackPlaylist) {
+            return nextIndex;
+          }
           if (isLastPlaybackSlot) {
             setLoopHold(true);
           } else {
@@ -114,7 +134,7 @@ const TVDisplay = () => {
         photoIntervalRef.current = null;
       }
     };
-  }, [activeSlotKey, currentPhotoCount, isLastPlaybackSlot, loopHold, playableSlotCount]);
+  }, [activeSlotKey, currentPhotoCount, isFallbackPlaylist, isLastPlaybackSlot, loopHold, playableSlotCount]);
 
   useEffect(() => {
     if (!loopHold) return undefined;
@@ -130,37 +150,26 @@ const TVDisplay = () => {
   const activeEntryKey = activeSlot?.entryKey || '';
   const currentEntry = activeSlot?.entry || null;
   const scheduleDate = toDate(schedule?.date) || now;
-  const currentTime = now.toLocaleTimeString('en-IN', { hour12: false });
-  const headerTitle = getLangField(schedule, 'title', 'te') || DEFAULT_HEADER_TITLE;
+  const clock = useMemo(() => formatClock(now), [now]);
 
   return (
-    <main className="h-dvh w-screen overflow-hidden bg-[#050517] text-white">
-      <AnnouncementBar fixed={false} tv />
+    <main className="tv-broadcast-screen h-dvh w-screen overflow-hidden bg-[#08080f] text-white">
+      <TopTicker messages={tickerMessages} />
 
-      <header className="grid h-[136px] grid-cols-[120px_minmax(0,1fr)_190px] items-center gap-5 bg-gradient-to-r from-[#ffd700] via-[#f5a623] to-[#ffd700] px-7 text-[#111827] shadow-2xl">
-        <div className="grid h-[104px] w-[104px] place-items-center rounded-full bg-white/88 p-2 shadow-[0_0_28px_rgba(255,255,255,0.65)] ring-4 ring-white/45">
-          <img src="/logo.webp" alt="TDP Narasaraopet" className="h-[90px] w-auto object-contain" />
-        </div>
-        <div className="min-w-0 text-center">
-          <h1 className="telugu truncate text-[32px] font-black leading-tight">{headerTitle}</h1>
-          <p className="telugu mt-1 text-[25px] font-black leading-tight text-[#5a1b00]">{DEFAULT_HEADER_SUBTITLE}</p>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-[19px] font-black">
-            <span className="inline-flex items-center gap-2"><CalendarDays size={21} /> {scheduleDate.toLocaleDateString('te-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-            <span>{scheduleDate.toLocaleDateString('te-IN', { weekday: 'long' })}</span>
-            <span className="inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1 text-sm uppercase tracking-[0.12em] text-white"><span className="h-2 w-2 animate-pulse rounded-full bg-white" /> Live</span>
-          </div>
-        </div>
-        <div className="justify-self-end rounded-lg bg-black/85 px-4 py-3 font-mono text-[24px] font-black text-tdp-yellow shadow-lg">{currentTime}</div>
-      </header>
+      <BroadcastHeader clock={clock} date={scheduleDate} />
 
-      <section className="grid h-[calc(100dvh-180px)] min-h-0 grid-cols-[30%_70%] grid-rows-[minmax(0,1fr)] overflow-hidden">
-        <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#0a0a2e] px-5 py-5 shadow-2xl">
-          <div className="mb-4 flex items-center justify-between gap-3">
+      <section className="tv-broadcast-body grid min-h-0 grid-cols-[32%_68%] overflow-hidden">
+        <aside className={`tv-left-panel tv-news-left-panel relative flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-4 ${panelFlash ? 'is-flashing' : ''}`}>
+          <div className="tv-left-panel-watermark" aria-hidden="true" />
+          <div className="relative z-10 mb-3 flex items-start justify-between gap-3">
             <div>
-              <p className="telugu text-[25px] font-black text-tdp-yellow">నేటి కార్యక్రమాలు</p>
-              <p className="mt-1 text-sm font-bold uppercase tracking-[0.14em] text-white/55">Live Timeline</p>
+              <p className="tv-panel-title telugu text-[22px] font-black">నేటి కార్యక్రమాలు</p>
+              <p className="tv-live-subtitle telugu mt-1 text-[11px] font-black tracking-[0.2em]">జీవ వేళాపట్టిక</p>
             </div>
-            <Radio className="text-red-400" size={28} />
+            <span className="tv-live-pill">
+              <span />
+              ప్రత్యక్షం
+            </span>
           </div>
 
           <TVTimeline
@@ -170,10 +179,7 @@ const TVDisplay = () => {
             isLoading={schedulesLoading}
           />
 
-          <div className="mt-auto grid gap-2 border-t border-white/10 pt-4 text-sm font-bold text-white/60">
-            <span className="inline-flex items-center gap-2"><TimerReset size={16} /> Auto refresh in {formatCountdown(refreshSeconds)}</span>
-            <span>Last updated {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-          </div>
+          <AttendanceWidget attendance={attendance} />
         </aside>
 
         <PhotoBroadcastPanel
@@ -181,32 +187,162 @@ const TVDisplay = () => {
           currentEntry={currentEntry}
           displayPhotos={displayPhotos}
           activePhotoIndex={activePhotoIndex}
+          setPhotoIndex={setPhotoIndex}
           loopHold={loopHold}
         />
       </section>
+
+      <BottomTicker messages={tickerMessages} />
     </main>
   );
 };
 
-const PhotoBroadcastPanel = ({ activeSlot, currentEntry, displayPhotos, activePhotoIndex, loopHold }) => {
+const TopTicker = ({ messages }) => (
+  <div className="tv-top-ticker">
+    <div className="tv-top-ticker-track">
+      {[...messages, ...messages].map((message, index) => (
+        <span key={`${message}-${index}`}>
+          {message}
+          <b>✦</b>
+        </span>
+      ))}
+    </div>
+  </div>
+);
+
+const BottomTicker = ({ messages }) => (
+  <div className="tv-bottom-ticker">
+    <div className="tv-bottom-star" aria-hidden="true">★</div>
+    <div className="tv-bottom-divider" aria-hidden="true" />
+    <div className="tv-bottom-ticker-window">
+      <div className="tv-bottom-ticker-track">
+        {[...messages, ...messages].map((message, index) => (
+          <span key={`${message}-${index}`} className={/[\u0C00-\u0C7F]/.test(message) ? 'telugu' : ''}>
+            {message}
+            <b>✦</b>
+          </span>
+        ))}
+      </div>
+    </div>
+    <div className="tv-bottom-chevrons" aria-hidden="true">
+      <span>&gt;</span><span>&gt;</span><span>&gt;</span>
+    </div>
+  </div>
+);
+
+const BroadcastHeader = ({ clock, date }) => (
+  <header className="tv-broadcast-header relative grid min-h-0 grid-cols-[220px_minmax(0,1fr)_250px] items-center gap-4 overflow-hidden px-4">
+    <HeaderParticles />
+    <div className="relative z-10 flex items-center gap-4">
+      <div className="tv-logo-frame">
+        <span className="tv-logo-ring tv-logo-ring-outer" />
+        <span className="tv-logo-ring tv-logo-ring-inner" />
+        <img src="/logo.webp" alt="Telugu Desam Party" />
+      </div>
+      <div className="min-w-0">
+        <p className="telugu text-[18px] font-black text-tdp-yellow drop-shadow-[0_0_10px_rgba(255,215,0,.75)]">తెలుగుదేశం పార్టీ</p>
+        <p className="telugu mt-1 text-[15px] font-black text-white/68">నరసరావుపేట</p>
+      </div>
+    </div>
+
+    <div className="relative z-10 min-w-0 text-center">
+      <p className="tv-header-kicker telugu">
+        డాక్టర్ చదలవాడ అరవింద బాబు — శాసనసభ్యులు, నరసరావుపేట తెలుగుదేశం
+      </p>
+      <h1 className="tv-header-title telugu">
+        <span>గౌరవ నరసరావుపేట శాసనసభ్యులు</span>
+        <strong>డాక్టర్ చదలవాడ అరవింద బాబు</strong>
+      </h1>
+      <p className="telugu mt-1 text-[18px] font-black text-tdp-yellow">నేటి పర్యటన వివరాలు</p>
+    </div>
+
+    <div className="relative z-10">
+      <ClockBadge clock={clock} date={date} />
+    </div>
+  </header>
+);
+
+const HeaderParticles = () => (
+  <div className="tv-header-particles" aria-hidden="true">
+    {Array.from({ length: 20 }).map((_, index) => (
+      <span
+        key={index}
+        style={{
+          '--x': `${(index * 17) % 100}%`,
+          '--delay': `${(index % 7) * -1.1}s`,
+          '--size': `${2 + (index % 4)}px`
+        }}
+      />
+    ))}
+  </div>
+);
+
+const ClockBadge = ({ clock, date }) => {
+  const minuteKey = `${clock.hours}:${clock.minutes}`;
+  const dateText = date.toLocaleDateString('te-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  const hourAngle = ((clock.hours % 12) + (clock.minutes / 60)) * 30;
+  const minuteAngle = clock.minutes * 6;
+  const secondAngle = clock.seconds * 6;
+
+  return (
+    <section key={minuteKey} className="tv-clock-badge">
+      <div className="tv-analog-clock" aria-hidden="true">
+        <span className="clock-hand hour" style={{ transform: `rotate(${hourAngle}deg)` }} />
+        <span className="clock-hand minute" style={{ transform: `rotate(${minuteAngle}deg)` }} />
+        <span className="clock-hand second" style={{ transform: `rotate(${secondAngle}deg)` }} />
+      </div>
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-2">
+          <p className="font-mono text-[28px] font-black leading-none text-tdp-yellow">
+            {clock.hh}:{clock.mm}:<span className="text-[23px]">{clock.ss}</span>
+          </p>
+          <span className={`tv-ampm ${clock.meridiem.toLowerCase()}`}>{clock.meridiem}</span>
+        </div>
+        <p className="mt-2 text-[13px] font-black uppercase tracking-[0.12em] text-white">{dateText}</p>
+      </div>
+    </section>
+  );
+};
+
+const PhotoBroadcastPanel = ({ activeSlot, currentEntry, displayPhotos, activePhotoIndex, setPhotoIndex, loopHold }) => {
+  const [photoOrientations, setPhotoOrientations] = useState({});
   const activePhoto = displayPhotos[activePhotoIndex] || null;
   const description = activeSlot?.isFallback
     ? WORK_IN_PROGRESS_TEXT
-    : stripHtml(getLangField(currentEntry, 'activity', 'te') || activePhoto?.caption || 'TDP Narasaraopet');
-  const timeRange = currentEntry ? formatEntryRange(currentEntry, activeSlot?.nextEntry) : 'Live display';
-  const sourceLabel = activeSlot?.kind === 'current' ? 'NOW' : activeSlot ? 'Work Done Photos' : 'Home Photos';
+    : stripHtml(getLangField(currentEntry, 'activity', 'te') || activePhoto?.caption || 'తెలుగుదేశం నరసరావుపేట');
+  const timeRange = currentEntry ? formatEntryRange(currentEntry, activeSlot?.nextEntry) : 'ప్రత్యక్ష ప్రసారం';
+  const revealDuration = `${Math.max(0.9, description.length / 40).toFixed(2)}s`;
+  const thumbPhotos = displayPhotos.slice(0, 4);
+  const extraCount = Math.max(0, displayPhotos.length - 4);
+
+  const handleImageLoad = (event, url) => {
+    const { naturalHeight, naturalWidth } = event.currentTarget;
+    if (!naturalHeight || !naturalWidth) return;
+    const orientation = naturalHeight > naturalWidth ? 'portrait' : 'landscape';
+    setPhotoOrientations((state) => (state[url] === orientation ? state : { ...state, [url]: orientation }));
+  };
 
   return (
-    <section className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_190px] overflow-hidden bg-black">
-      <div className="relative min-h-0 overflow-hidden">
-        {displayPhotos.map((photo, index) => (
-          <img
-            key={`${activeSlot?.key || 'fallback'}-${photo.url}-${index}`}
-            src={photo.url}
-            alt={photo.caption || 'TV display photo'}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-[600ms] ${index === activePhotoIndex ? 'opacity-100' : 'opacity-0'}`}
-          />
-        ))}
+    <section className="tv-right-panel grid min-h-0 min-w-0 grid-rows-[80%_20%] overflow-hidden bg-[#05050a] p-0">
+      <div className="tv-photo-stage relative min-h-0 overflow-hidden">
+        {displayPhotos.map((photo, index) => {
+          const isActive = index === activePhotoIndex;
+          const isPortrait = photoOrientations[photo.url] === 'portrait';
+          return (
+            <div
+              key={`${activeSlot?.key || 'fallback'}-${photo.url}-${index}`}
+              className={`tv-photo-frame ${isActive ? 'is-active' : ''} ${isPortrait ? 'is-portrait' : 'is-landscape'}`}
+            >
+              {isPortrait && <img src={photo.url} alt="" className="tv-photo-backdrop" aria-hidden="true" />}
+              <img
+                src={photo.url}
+                alt={photo.caption || 'టీవీ ప్రదర్శన ఫోటో'}
+                onLoad={(event) => handleImageLoad(event, photo.url)}
+                className={`tv-photo-image ${isPortrait ? 'object-contain' : 'object-cover'}`}
+              />
+            </div>
+          );
+        })}
         {!displayPhotos.length && (
           <div className="absolute inset-0 grid place-items-center bg-slate-950 text-white/60">
             <ImageOff size={54} />
@@ -214,26 +350,42 @@ const PhotoBroadcastPanel = ({ activeSlot, currentEntry, displayPhotos, activePh
         )}
       </div>
 
-      <footer className="grid h-[190px] grid-cols-[minmax(0,1fr)_220px] gap-6 border-t border-yellow-300/25 bg-[#061329] px-8 py-5">
+      <footer className="tv-info-bar grid min-h-0 grid-cols-[55%_45%] gap-4 overflow-hidden px-4 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
-            <p className="font-mono text-[18px] font-black uppercase tracking-[0.12em] text-tdp-yellow">{timeRange}</p>
-            <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.16em] ${activeSlot?.kind === 'current' ? 'animate-pulse bg-red-600 text-white' : 'bg-white/10 text-white/72'}`}>
-              {loopHold ? 'Loop restart soon' : sourceLabel}
-            </span>
+            <span className="tv-live-dot" />
+            <span className="tv-live-now-text telugu">ప్రత్యక్షం</span>
           </div>
-          <p key={`${activeSlot?.key || 'fallback'}-${description}`} className="tv-description-reveal telugu mt-4 line-clamp-3 min-h-[92px] text-[25px] font-black leading-[1.45] text-white">
-            {description}
+          <p className="mt-2 text-[20px] font-black text-tdp-yellow drop-shadow-[0_0_10px_rgba(255,215,0,.85)]">{timeRange}</p>
+          <p
+            key={`${activeSlot?.key || 'fallback'}-${description}`}
+            className="tv-description-reveal telugu mt-3 line-clamp-4 text-[17px] font-black leading-[1.55] text-white"
+            style={{ '--typewriter-duration': revealDuration, '--typewriter-chars': Math.max(description.length, 1) }}
+          >
+            {loopHold ? DONE_TEXT : description}
           </p>
         </div>
-        <div className="flex flex-col items-end justify-end gap-4">
-          <img src="/logo.webp" alt="" className="h-14 w-auto rounded-full bg-white object-contain p-1 shadow-yellow" />
-          <p className="rounded-full bg-white/12 px-4 py-2 text-sm font-black text-white">Photos {activePhotoIndex + 1} of {Math.max(displayPhotos.length, 1)}</p>
-          <div className="flex max-w-[210px] flex-wrap justify-end gap-2">
-            {displayPhotos.map((photo, index) => (
-              <span key={`${photo.url}-dot-${index}`} className={`h-2.5 rounded-full transition-all ${index === activePhotoIndex ? 'w-9 bg-tdp-yellow' : 'w-2.5 bg-white/45'}`} />
-            ))}
+
+        <div className="min-w-0">
+          <div className="tv-thumbs-heading">
+            <span />
+            <p className="telugu">పని పూర్తి ఫోటోలు</p>
           </div>
+          <div className="mt-4 flex items-center justify-end gap-3">
+            {thumbPhotos.map((photo, index) => (
+              <button
+                key={`${photo.url}-thumb-${index}`}
+                type="button"
+                onClick={() => setPhotoIndex(index)}
+                className={`tv-thumb ${index === activePhotoIndex ? 'is-active' : ''}`}
+                aria-label={`ఫోటో ${index + 1}`}
+              >
+                <img src={photo.url} alt="" />
+              </button>
+            ))}
+            {extraCount > 0 && <span className="tv-extra-count">+{extraCount}</span>}
+          </div>
+          <p className="telugu mt-3 text-right text-[15px] font-black text-white">ఫోటో {activePhotoIndex + 1} / {Math.max(displayPhotos.length, 1)}</p>
         </div>
       </footer>
     </section>
@@ -245,6 +397,7 @@ const TVTimeline = ({ entries, activeEntryKey, playedKeys, isLoading }) => {
   const dotRefs = useRef({});
   const [cycleTop, setCycleTop] = useState(18);
   const [moving, setMoving] = useState(false);
+  const [arriving, setArriving] = useState(false);
   const activeIndex = entries.findIndex((entry) => entry.tvKey === activeEntryKey);
   const showCycle = activeIndex >= 0;
 
@@ -255,7 +408,9 @@ const TVTimeline = ({ entries, activeEntryKey, playedKeys, isLoading }) => {
       if (!line || !dot) return;
       const lineBox = line.getBoundingClientRect();
       const dotBox = dot.getBoundingClientRect();
-      setCycleTop(Math.max(18, dotBox.top - lineBox.top + (dotBox.height / 2)));
+      const measuredTop = dotBox.top - lineBox.top + (dotBox.height / 2);
+      const maxVisibleTop = Math.max(18, lineBox.height - 38);
+      setCycleTop(Math.min(maxVisibleTop, Math.max(18, measuredTop)));
     };
     measure();
     window.addEventListener('resize', measure);
@@ -265,30 +420,51 @@ const TVTimeline = ({ entries, activeEntryKey, playedKeys, isLoading }) => {
   useEffect(() => {
     if (!showCycle) return undefined;
     setMoving(true);
-    const timer = window.setTimeout(() => setMoving(false), CYCLE_MOVE_MS);
-    return () => window.clearTimeout(timer);
+    setArriving(false);
+    const movementTimer = window.setTimeout(() => {
+      setMoving(false);
+      setArriving(true);
+    }, CYCLE_MOVE_MS);
+    const settleTimer = window.setTimeout(() => setArriving(false), CYCLE_MOVE_MS + 700);
+    return () => {
+      window.clearTimeout(movementTimer);
+      window.clearTimeout(settleTimer);
+    };
   }, [activeEntryKey, showCycle]);
 
   if (isLoading && !entries.length) {
-    return <div className="grid flex-1 place-items-center rounded-lg border border-white/10 bg-white/5 text-lg font-black text-white/70">Loading schedule...</div>;
+    return <div className="telugu grid flex-1 place-items-center rounded-lg border border-white/10 bg-white/5 text-lg font-black text-white/70">వేళాపట్టిక లోడ్ అవుతోంది...</div>;
   }
 
   if (!entries.length) {
     return (
-      <div className="grid flex-1 place-items-center rounded-lg border border-dashed border-white/15 bg-white/5 p-6 text-center text-lg font-black text-white/60">
-        No schedule published for today.
+      <div className="telugu relative z-10 grid flex-1 place-items-center rounded-lg border border-dashed border-white/15 bg-white/5 p-6 text-center text-lg font-black text-white/60">
+        ఈ రోజు ప్రచురించిన వేళాపట్టిక లేదు.
       </div>
     );
   }
 
   return (
-    <div ref={lineRef} className="relative flex-1 overflow-hidden">
-      <div className="absolute bottom-0 left-[24px] top-2 w-1 rounded-full border-l-4 border-dashed border-white/20" />
-      <div className="absolute left-[22px] top-2 w-1 rounded-full bg-tdp-yellow transition-[height] duration-[1500ms] ease-in-out" style={{ height: showCycle ? `${cycleTop}px` : 0 }} />
+    <div ref={lineRef} className={`tv-timeline-shell relative z-10 flex-1 overflow-hidden ${moving ? 'is-moving' : ''} ${arriving ? 'is-arriving' : ''}`}>
+      <div className="tv-timeline-road absolute bottom-0 left-[24px] top-2 w-1 rounded-full" />
+      <div className="tv-timeline-completed-line absolute left-[22px] top-2 w-1 rounded-full transition-[height] duration-[2000ms]" style={{ height: showCycle ? `${cycleTop}px` : 0 }} />
       {showCycle && (
-        <div className={`tv-car-marker ${moving ? 'is-moving' : 'is-stopped'}`} style={{ top: `${cycleTop - 18}px` }}>
-          {moving && <span className="tv-car-trail" />}
-          <AnimatedCarIcon />
+        <div className={`tv-car-marker ${moving ? 'is-moving' : 'is-stopped'} ${arriving ? 'has-arrived' : ''}`} style={{ top: `${cycleTop - 18}px` }}>
+          <span className="tv-car-halo" />
+          <span className="tv-headlight" />
+          <span className="tv-car-beam" />
+          {moving && (
+            <>
+              <span className="tv-speed-line line-1" />
+              <span className="tv-speed-line line-2" />
+              <span className="tv-speed-line line-3" />
+              <span className="tv-smoke-puff puff-1" />
+              <span className="tv-smoke-puff puff-2" />
+            </>
+          )}
+          <span className="tv-car-shell">
+            <AnimatedCarIcon />
+          </span>
         </div>
       )}
       <div className="relative z-10 grid h-full content-start gap-2 overflow-hidden pr-1">
@@ -298,28 +474,96 @@ const TVTimeline = ({ entries, activeEntryKey, playedKeys, isLoading }) => {
           const isPlayed = state === 'played';
           const isUpcoming = state === 'upcoming';
           return (
-            <article key={entry.tvKey} className={`relative ml-12 rounded-lg border p-3 transition ${isActive ? 'scale-[1.01] border-tdp-yellow bg-yellow-400/14 shadow-yellow' : 'border-white/10 bg-white/5'}`}>
-              <span ref={(node) => { dotRefs.current[entry.tvKey] = node; }} className={`absolute -left-[45px] top-5 z-10 grid h-8 w-8 place-items-center rounded-full border-4 border-[#0a0a2e] ${isPlayed ? 'bg-green-600 text-white' : isActive ? 'bg-tdp-yellow text-[#0a0a2e]' : 'bg-slate-600 text-white/80'}`}>
+            <article
+              key={entry.tvKey}
+              className={`tv-timeline-row ${state} ${isActive && arriving ? 'is-activated' : ''} relative ml-12 rounded-lg border p-3 transition`}
+              style={{ '--row-index': index }}
+            >
+              <span ref={(node) => { dotRefs.current[entry.tvKey] = node; }} className={`tv-timeline-dot ${state} absolute -left-[45px] top-5 z-10 grid h-8 w-8 place-items-center rounded-full border-4`}>
                 {isPlayed && <CheckCircle2 size={18} />}
-                {isActive && <span className="h-3 w-3 rounded-full bg-[#0a0a2e]" />}
+                {isActive && (
+                  <>
+                    <span className="tv-dot-ring ring-1" />
+                    <span className="tv-dot-ring ring-2" />
+                    <span className="tv-dot-ring ring-3" />
+                    <span className="h-3 w-3 rounded-full bg-[#0a0a2e]" />
+                  </>
+                )}
                 {isUpcoming && <Clock3 size={17} />}
               </span>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className={`text-[22px] font-black leading-none ${isPlayed ? 'text-green-300' : isActive ? 'text-tdp-yellow' : 'text-white/58'}`}>{entry.time}</p>
-                  <h3 className={`telugu mt-2 line-clamp-2 font-black leading-snug ${isActive ? 'text-[20px] text-white' : 'text-[18px] text-white/68'}`}>
+                  <p className={`tv-time-text ${state} flex items-center gap-1 font-black leading-none`}>
+                    {isActive && <Play size={13} fill="currentColor" />}
+                    {renderTimelineTime(entry.time, isActive)}
+                  </p>
+                  <h3 className={`tv-activity-text ${state} telugu mt-2 leading-snug ${isActive ? '' : 'line-clamp-2'}`}>
                     {getLangField(entry, 'activity', 'te') || 'Schedule entry'}
                   </h3>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.06em] ${isActive ? 'animate-pulse bg-red-600 text-white' : isPlayed ? 'bg-green-500/15 text-green-200' : 'bg-white/10 text-white/48'}`}>
-                  {isActive ? (entry.broadcastStatus === 'in-progress' ? 'Now' : 'On Air') : isPlayed ? 'Played' : 'Upcoming'}
+                <span className={`tv-status-badge ${state} telugu shrink-0 rounded-full px-2 py-1 text-[11px] font-black`}>
+                  {isActive ? 'ప్రత్యక్షం' : isPlayed ? 'పూర్తయింది' : 'రాబోతోంది'}
                 </span>
               </div>
+              {isActive && (
+                <span className="tv-row-particles" aria-hidden="true">
+                  {Array.from({ length: 8 }).map((_, particleIndex) => (
+                    <span key={particleIndex} style={{ '--particle-index': particleIndex }} />
+                  ))}
+                </span>
+              )}
             </article>
           );
         })}
       </div>
     </div>
+  );
+};
+
+const renderTimelineTime = (time, isActive) => {
+  if (!isActive) return time;
+  return String(time || '').split('').map((char, index) => (
+    <span key={`${char}-${index}`} style={{ '--char-index': index }}>
+      {char === ' ' ? '\u00a0' : char}
+    </span>
+  ));
+};
+
+const AttendanceWidget = ({ attendance }) => {
+  const { displayCount, percentage } = useAnimatedAttendance(attendance);
+
+  if (attendance.showWidget === false) return null;
+
+  const photoUrl = attendance.mlaPhotoUrl || DEFAULT_ATTENDANCE.mlaPhotoUrl;
+  const target = Math.max(Number(attendance.target) || 0, 0);
+
+  return (
+    <section className="tv-attendance-widget relative z-10 mt-3">
+      <div className="tv-attendance-profile">
+        <div className="tv-attendance-person">
+          <div className="tv-mla-photo-ring">
+            <img className="tv-mla-photo" src={photoUrl} alt={attendance.mlaName || DEFAULT_ATTENDANCE.mlaName} />
+          </div>
+          <div className="tv-attendance-copy min-w-0">
+          <p className="tv-attendance-eyebrow telugu">శాసనసభ్యులు వివరాలు</p>
+          <h3 className="tv-attendance-name telugu">{attendance.mlaName || DEFAULT_ATTENDANCE.mlaName}</h3>
+          <p className="tv-attendance-constituency telugu">{attendance.constituencyName || DEFAULT_ATTENDANCE.constituencyName}</p>
+          </div>
+        </div>
+        <div className="tv-attendance-stats">
+          <div className="tv-attendance-count-row">
+            <span className="telugu">{attendance.label || DEFAULT_ATTENDANCE.label}</span>
+            <strong>{displayCount} / {target}</strong>
+          </div>
+          <div className="tv-attendance-progress">
+            <div className="tv-attendance-fill h-full rounded-full" style={{ width: `${percentage}%` }} />
+          </div>
+          <div className="tv-attendance-stars" aria-hidden="true">
+            {Array.from({ length: 5 }).map((_, index) => <span key={index}>★</span>)}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -342,8 +586,38 @@ const AnimatedCarIcon = () => (
   </svg>
 );
 
+const useAnimatedAttendance = (attendance) => {
+  const [displayCount, setDisplayCount] = useState(attendance.count);
+  const previousCountRef = useRef(attendance.count);
+  const target = Math.max(Number(attendance.target) || 0, 0);
+  const percentage = target > 0 ? Math.min(100, Math.max(0, (attendance.count / target) * 100)) : 0;
+
+  useEffect(() => {
+    const from = previousCountRef.current;
+    const to = attendance.count;
+    previousCountRef.current = to;
+    if (from === to) {
+      setDisplayCount(to);
+      return undefined;
+    }
+
+    const start = performance.now();
+    let frame = 0;
+    const animate = (time) => {
+      const progress = Math.min(1, (time - start) / 1_000);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayCount(Math.round(from + (to - from) * eased));
+      if (progress < 1) frame = window.requestAnimationFrame(animate);
+    };
+    frame = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(frame);
+  }, [attendance.count]);
+
+  return { displayCount, percentage };
+};
+
 const buildBroadcastState = (schedule, now, fallbackPhotos) => {
-  if (!schedule) return { timelineEntries: [], playableSlots: [] };
+  if (!schedule) return { timelineEntries: [], playableSlots: [], hasCurrentSlot: false };
 
   const timeBasedEntries = getLiveEntries(schedule, now);
   const hasManualProgress = timeBasedEntries.some((entry) => ['completed', 'in-progress'].includes(normalizeBroadcastStatus(entry.status)));
@@ -371,7 +645,7 @@ const buildBroadcastState = (schedule, now, fallbackPhotos) => {
   const currentSlot = currentEntry ? [createPlaybackSlot(currentEntry, 'current', fallbackPhotos)] : [];
   const playableSlots = [...completedSlots, ...currentSlot];
 
-  return { timelineEntries: entries, playableSlots };
+  return { timelineEntries: entries, playableSlots, hasCurrentSlot: Boolean(currentEntry) };
 };
 
 const createPlaybackSlot = (entry, kind, fallbackPhotos) => {
@@ -389,7 +663,7 @@ const createPlaybackSlot = (entry, kind, fallbackPhotos) => {
 
 const normalizeBroadcastStatus = (status = '') => {
   const value = String(status || '').toLowerCase().trim();
-  if (['completed', 'complete', 'done'].includes(value)) return 'completed';
+  if (['completed', 'complete', 'done', 'played'].includes(value)) return 'completed';
   if (['in-progress', 'inprogress', 'progress', 'current', 'now', 'live'].includes(value)) return 'in-progress';
   if (['upcoming', 'scheduled', 'pending'].includes(value)) return 'upcoming';
   return '';
@@ -405,12 +679,69 @@ const compareEntries = (left, right) => {
 const formatEntryRange = (entry, nextEntry) => {
   const start = entry?.time || '';
   const end = entry?.endTime || nextEntry?.time || '';
-  return end && end !== start ? `${start} - ${end}` : start || 'Live display';
+  return end && end !== start ? `${start} - ${end}` : start || 'ప్రత్యక్ష ప్రసారం';
+};
+
+const formatClock = (date) => {
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  const meridiem = hours < 12 ? 'AM' : 'PM';
+  hours = hours % 12 || 12;
+  return {
+    hours,
+    minutes,
+    seconds,
+    hh: String(hours).padStart(2, '0'),
+    mm: String(minutes).padStart(2, '0'),
+    ss: String(seconds).padStart(2, '0'),
+    meridiem
+  };
+};
+
+const normalizeAttendance = (doc = {}) => {
+  const count = Number(doc?.currentCount ?? doc?.count ?? DEFAULT_ATTENDANCE.count);
+  const target = Number(doc?.totalTarget ?? doc?.target ?? DEFAULT_ATTENDANCE.target);
+  const tickerMessages = normalizeTickerMessages(doc?.tickerMessages || doc?.tickers || doc?.messages);
+  const showWidget = doc?.showWidget ?? doc?.show ?? doc?.isVisible ?? DEFAULT_ATTENDANCE.showWidget;
+  const mlaName = doc?.mlaName || doc?.profileName || DEFAULT_ATTENDANCE.mlaName;
+  const constituencyName = doc?.constituencyName || DEFAULT_ATTENDANCE.constituencyName;
+  const mlaPhotoUrl = doc?.mlaPhotoUrl || doc?.photoUrl || DEFAULT_ATTENDANCE.mlaPhotoUrl;
+  return {
+    ...DEFAULT_ATTENDANCE,
+    ...doc,
+    count: Number.isFinite(count) ? Math.max(0, Math.round(count)) : DEFAULT_ATTENDANCE.count,
+    target: Number.isFinite(target) ? Math.max(0, Math.round(target)) : DEFAULT_ATTENDANCE.target,
+    label: doc?.label || doc?.label_te || DEFAULT_ATTENDANCE.label,
+    show: showWidget,
+    showWidget,
+    mlaName,
+    constituencyName,
+    profileName: mlaName,
+    mlaPhotoUrl,
+    photoUrl: mlaPhotoUrl,
+    tickerMessages
+  };
+};
+
+const normalizeTickerMessages = (messages) => {
+  const normalized = Array.isArray(messages)
+    ? messages.map((message) => translateKnownTicker(String(message || '').trim())).filter(Boolean).slice(0, 3)
+    : [];
+  return normalized.length ? normalized : DEFAULT_ATTENDANCE.tickerMessages;
+};
+
+const translateKnownTicker = (message) => {
+  const lower = message.toLowerCase();
+  if (lower.includes('website made by wayzentech')) return 'వెబ్‌సైట్ తయారు చేసింది వేజెన్‌టెక్ — 9398724704';
+  if (lower.includes('chadalavada aravinda babu')) return 'డాక్టర్ చదలవాడ అరవింద బాబు — శాసనసభ్యులు, నరసరావుపేట, తెలుగుదేశం పార్టీ';
+  if (lower.includes('for the people') || lower.includes('telugu desam')) return 'ప్రజల కోసం... అభివృద్ధి కోసం... తెలుగుదేశం కోసం...';
+  return message;
 };
 
 const getTimelineState = (entry, activeEntryKey, playedKeys) => {
   if (entry.tvKey === activeEntryKey) return 'active';
-  if (playedKeys.has(entry.tvKey)) return 'played';
+  if (playedKeys.has(entry.tvKey) || entry.broadcastStatus === 'completed') return 'played';
   return 'upcoming';
 };
 

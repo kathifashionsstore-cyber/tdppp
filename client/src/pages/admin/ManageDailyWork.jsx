@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CalendarDays, Camera, Clock3, ImagePlus, Plus, Save, Trash2, XCircle } from 'lucide-react';
+import { CalendarDays, Camera, Clock3, ImagePlus, Plus, Save, Trash2, Users, XCircle } from 'lucide-react';
 import ImageUploader from '@/components/admin/ImageUploader';
 import ContentTable from '@/components/admin/ContentTable';
-import { useCollection, useCrud } from '@/hooks/useFirestore';
+import { useCollection, useCrud, useRealtimeDoc } from '@/hooks/useFirestore';
 import { formatDate } from '@/utils/dateUtils';
 import { confirmToast, toastError, toastSuccess } from '@/utils/toastUtils.jsx';
 import { toDate } from '@/utils/helpers';
@@ -53,11 +53,32 @@ const emptyPhoto = () => ({
   isPublished: true
 });
 
+const emptyAttendance = () => ({
+  currentCount: 0,
+  totalTarget: 0,
+  count: 0,
+  target: 0,
+  label: 'ఇప్పటివరకు హాజరైన వ్యక్తులు',
+  showWidget: true,
+  show: true,
+  mlaName: 'డాక్టర్ చదలవాడ అరవింద బాబు',
+  constituencyName: 'నరసరావుపేట నియోజకవర్గం',
+  mlaPhotoUrl: '/logo.webp',
+  photoUrl: '/logo.webp',
+  tickerMessages: [
+    'ప్రజల కోసం... అభివృద్ధి కోసం... తెలుగుదేశం కోసం...',
+    'వెబ్‌సైట్ తయారు చేసింది వేజెన్‌టెక్ — 9398724704',
+    'డాక్టర్ చదలవాడ అరవింద బాబు — శాసనసభ్యులు, నరసరావుపేట, తెలుగుదేశం పార్టీ'
+  ]
+});
+
 const ManageDailyWork = () => {
   const { data: schedules = [], isLoading: schedulesLoading } = useCollection('dailySchedules', { orderByField: 'date', orderDirection: 'desc' });
   const { data: photoItems = [], isLoading: photosLoading } = useCollection('dailyWork', { orderByField: 'date', orderDirection: 'desc' });
+  const { data: attendanceDoc, isLoading: attendanceLoading } = useRealtimeDoc('tvAttendance', 'today');
   const scheduleCrud = useCrud('dailySchedules');
   const photoCrud = useCrud('dailyWork');
+  const attendanceCrud = useCrud('tvAttendance');
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [scheduleForm, setScheduleForm] = useState(emptySchedule);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -68,6 +89,9 @@ const ManageDailyWork = () => {
   const [photoForm, setPhotoForm] = useState(emptyPhoto);
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [attendanceForm, setAttendanceForm] = useState(emptyAttendance);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [attendanceUploading, setAttendanceUploading] = useState(false);
 
   useEffect(() => {
     try {
@@ -89,6 +113,10 @@ const ManageDailyWork = () => {
     return () => window.clearInterval(timer);
   }, [photoForm, scheduleForm]);
 
+  useEffect(() => {
+    if (attendanceDoc) setAttendanceForm(normalizeAttendanceForm(attendanceDoc));
+  }, [attendanceDoc]);
+
   const dayOfWeek = useMemo(() => inputToDate(scheduleForm.dateInput).toLocaleDateString('en-IN', { weekday: 'long' }), [scheduleForm.dateInput]);
   const updateSchedule = (key, value) => setScheduleForm((state) => ({ ...state, [key]: value }));
   const updateEntry = (index, key, value) => setScheduleForm((state) => ({
@@ -96,6 +124,12 @@ const ManageDailyWork = () => {
     entries: state.entries.map((entry, entryIndex) => entryIndex === index ? { ...entry, [key]: value } : entry)
   }));
   const updatePhoto = (key, value) => setPhotoForm((state) => ({ ...state, [key]: value }));
+  const updateAttendance = (key, value) => setAttendanceForm((state) => ({ ...state, [key]: value }));
+  const updateTickerMessage = (index, value) => setAttendanceForm((state) => {
+    const messages = [...(state.tickerMessages?.length ? state.tickerMessages : emptyAttendance().tickerMessages)];
+    messages[index] = value;
+    return { ...state, tickerMessages: messages.slice(0, 3) };
+  });
 
   const updateEntryTvPhotoUrls = (index, urls) => setScheduleForm((state) => ({
     ...state,
@@ -302,6 +336,46 @@ const ManageDailyWork = () => {
     }
   };
 
+  const saveAttendance = async (event) => {
+    event.preventDefault();
+    if (attendanceUploading) return toast.error('Please wait until MLA photo upload finishes');
+    setAttendanceSaving(true);
+    try {
+      const tickerMessages = (attendanceForm.tickerMessages?.length ? attendanceForm.tickerMessages : emptyAttendance().tickerMessages)
+        .map((message) => String(message || '').trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      const currentCount = Math.max(0, Math.round(Number(attendanceForm.currentCount ?? attendanceForm.count) || 0));
+      const totalTarget = Math.max(0, Math.round(Number(attendanceForm.totalTarget ?? attendanceForm.target) || 0));
+      const mlaName = attendanceForm.mlaName?.trim() || emptyAttendance().mlaName;
+      const constituencyName = attendanceForm.constituencyName?.trim() || emptyAttendance().constituencyName;
+      const mlaPhotoUrl = attendanceForm.mlaPhotoUrl || attendanceForm.photoUrl || emptyAttendance().mlaPhotoUrl;
+      const showWidget = attendanceForm.showWidget ?? attendanceForm.show;
+      const payload = {
+        mlaPhotoUrl,
+        mlaName,
+        constituencyName,
+        currentCount,
+        totalTarget,
+        showWidget: !!showWidget,
+        label: attendanceForm.label?.trim() || emptyAttendance().label,
+        label_te: attendanceForm.label?.trim() || emptyAttendance().label,
+        count: currentCount,
+        target: totalTarget,
+        show: !!showWidget,
+        profileName: mlaName,
+        photoUrl: mlaPhotoUrl,
+        tickerMessages: tickerMessages.length ? tickerMessages : emptyAttendance().tickerMessages
+      };
+      await attendanceCrud.set.mutateAsync({ id: 'today', data: payload });
+      toast.success('TV attendance widget updated');
+    } catch (error) {
+      toastError(error, 'Attendance save failed');
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
+
   return (
     <div className="grid gap-6">
       <div className="rounded-2xl bg-gradient-to-r from-slate-950 to-slate-800 p-5 text-white shadow-xl">
@@ -310,6 +384,69 @@ const ManageDailyWork = () => {
         <p className="mt-1 text-sm text-white/65">Mobile-friendly schedule publishing with autosave and a separate photo updates manager.</p>
         {lastAutosave && <p className="mt-3 text-xs font-black text-tdp-yellow">Draft autosaved at {lastAutosave}</p>}
       </div>
+
+      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
+        <div className="mb-5">
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-tdp-red"><Users size={15} /> TV Attendance Widget</p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">MLA Attendance / Presence</h2>
+        </div>
+
+        {attendanceLoading ? (
+          <div className="rounded-xl bg-slate-50 p-5 font-bold text-slate-500">Loading attendance settings...</div>
+        ) : (
+          <form onSubmit={saveAttendance} className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <ImageUploader
+                label="Attendance Profile Photo for TV"
+                value={attendanceForm.mlaPhotoUrl || attendanceForm.photoUrl || ''}
+                aspectRatio="1/1"
+                onUploadStateChange={setAttendanceUploading}
+                onChange={(url) => setAttendanceForm((state) => ({ ...state, mlaPhotoUrl: url, photoUrl: url }))}
+                onUploadComplete={(uploaded) => {
+                  const metadata = toImgBBUploadMeta(uploaded);
+                  if (metadata) setAttendanceForm((state) => ({ ...state, mlaPhotoUrl: metadata.imageUrl, photoUrl: metadata.imageUrl }));
+                }}
+              />
+            </div>
+            <label className="grid gap-1 text-sm font-black text-slate-700">
+              MLA Display Name
+              <input value={attendanceForm.mlaName || ''} onChange={(event) => updateAttendance('mlaName', event.target.value)} className="telugu min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+            </label>
+            <label className="grid gap-1 text-sm font-black text-slate-700">
+              Constituency Name
+              <input value={attendanceForm.constituencyName || ''} onChange={(event) => updateAttendance('constituencyName', event.target.value)} className="telugu min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+            </label>
+            <label className="grid gap-1 text-sm font-black text-slate-700">
+              Attendance Current Count
+              <input type="number" min="0" value={attendanceForm.currentCount} onChange={(event) => updateAttendance('currentCount', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+            </label>
+            <label className="grid gap-1 text-sm font-black text-slate-700">
+              Attendance Total Target
+              <input type="number" min="0" value={attendanceForm.totalTarget} onChange={(event) => updateAttendance('totalTarget', event.target.value)} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+            </label>
+            <label className="grid gap-1 text-sm font-black text-slate-700 md:col-span-2">
+              Display label
+              <input value={attendanceForm.label || ''} onChange={(event) => updateAttendance('label', event.target.value)} className="telugu min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+            </label>
+            <label className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-slate-50 px-4 text-sm font-black text-slate-700">
+              <input type="checkbox" checked={!!attendanceForm.showWidget} onChange={(event) => updateAttendance('showWidget', event.target.checked)} />
+              Show/Hide Widget
+            </label>
+            <div className="grid gap-3 md:col-span-2">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-tdp-red">Bottom / Top Ticker Messages</p>
+              {(attendanceForm.tickerMessages?.length ? attendanceForm.tickerMessages : emptyAttendance().tickerMessages).slice(0, 3).map((message, index) => (
+                <label key={index} className="grid gap-1 text-sm font-black text-slate-700">
+                  Ticker message {index + 1}
+                  <input value={message || ''} onChange={(event) => updateTickerMessage(index, event.target.value)} className="telugu min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+                </label>
+              ))}
+            </div>
+            <button disabled={attendanceSaving || attendanceUploading} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 text-base font-black text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
+              <Save size={18} /> {attendanceSaving ? 'Saving...' : 'Save Attendance'}
+            </button>
+          </form>
+        )}
+      </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 md:p-6">
         <div className="mb-5">
@@ -396,6 +533,7 @@ const ManageDailyWork = () => {
                       <option value="upcoming">Upcoming</option>
                       <option value="in-progress">In progress / now</option>
                       <option value="completed">Completed with photos</option>
+                      <option value="played">Played</option>
                     </select>
                   </label>
                   <label className="grid gap-1 text-sm font-black text-slate-700">
@@ -564,7 +702,7 @@ const formatEntryTime = (entry, prefix = '') => {
 
 const normalizeEntryStatus = (status = 'upcoming') => {
   const value = String(status || '').toLowerCase().trim();
-  if (['completed', 'complete', 'done'].includes(value)) return 'completed';
+  if (['completed', 'complete', 'done', 'played'].includes(value)) return 'completed';
   if (['in-progress', 'inprogress', 'progress', 'current', 'now', 'live'].includes(value)) return 'in-progress';
   return 'upcoming';
 };
@@ -583,5 +721,26 @@ const normalizeTvPhotos = (photos = []) => (Array.isArray(photos) ? photos : [])
     };
   })
   .filter(Boolean);
+
+const normalizeAttendanceForm = (item = {}) => {
+  const defaults = emptyAttendance();
+  const tickerMessages = Array.isArray(item.tickerMessages)
+    ? item.tickerMessages.map((message) => String(message || '').trim()).filter(Boolean).slice(0, 3)
+    : defaults.tickerMessages;
+  return {
+    currentCount: Math.max(0, Math.round(Number(item.currentCount ?? item.count ?? defaults.currentCount) || 0)),
+    totalTarget: Math.max(0, Math.round(Number(item.totalTarget ?? item.target ?? defaults.totalTarget) || 0)),
+    count: Math.max(0, Math.round(Number(item.currentCount ?? item.count ?? defaults.count) || 0)),
+    target: Math.max(0, Math.round(Number(item.totalTarget ?? item.target ?? defaults.target) || 0)),
+    label: item.label || item.label_te || defaults.label,
+    showWidget: item.showWidget ?? item.show ?? item.isVisible ?? defaults.showWidget,
+    show: item.showWidget ?? item.show ?? item.isVisible ?? defaults.show,
+    mlaName: item.mlaName || item.profileName || defaults.mlaName,
+    constituencyName: item.constituencyName || defaults.constituencyName,
+    mlaPhotoUrl: item.mlaPhotoUrl || item.photoUrl || defaults.mlaPhotoUrl,
+    photoUrl: item.mlaPhotoUrl || item.photoUrl || defaults.photoUrl,
+    tickerMessages: tickerMessages.length ? tickerMessages : defaults.tickerMessages
+  };
+};
 
 export default ManageDailyWork;

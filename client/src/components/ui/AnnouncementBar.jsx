@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getLangField, stripHtml } from '@/utils/helpers';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -26,6 +26,7 @@ const defaultAnnouncements = [
 
 const AnnouncementBar = ({ fixed = true, tv = false }) => {
   const { language } = useLanguage();
+  const [activeIndex, setActiveIndex] = useState(0);
   const announcements = useMemo(() => defaultAnnouncements
     .map((item) => ({
       ...item,
@@ -33,8 +34,30 @@ const AnnouncementBar = ({ fixed = true, tv = false }) => {
     }))
     .map((item) => ({ ...item, linkUrl: item.linkUrl || item.url || '' })), [language]);
 
+  useEffect(() => {
+    if (!tv || announcements.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setActiveIndex((index) => (index + 1) % announcements.length);
+    }, 4_000);
+    return () => window.clearInterval(timer);
+  }, [announcements.length, tv]);
+
   const mobileCallLink = announcements.find((item) => item.linkUrl?.startsWith('tel:'))?.linkUrl || 'tel:9398724704';
   const marqueeItems = [...announcements, ...announcements];
+  const activeAnnouncement = announcements[activeIndex % Math.max(announcements.length, 1)] || announcements[0];
+
+  if (tv) {
+    return (
+      <div className={`announcement-bar tv-announcement-bar ${fixed ? 'fixed inset-x-0 top-0 z-[90]' : 'relative z-20'} h-11 w-full overflow-hidden text-[#1a1a1a] shadow-md`}>
+        <div key={activeAnnouncement?.id || activeAnnouncement?.text || activeIndex} className="tv-announcement-content">
+          <span className="tv-announcement-line" />
+          <span aria-hidden="true" className="tv-announcement-star">✦</span>
+          <span className="tv-announcement-text">{activeAnnouncement?.text}</span>
+          <span className="tv-announcement-line" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`announcement-bar ${fixed ? 'fixed inset-x-0 top-0 z-[90]' : 'relative z-20'} ${tv ? 'h-11' : 'h-8 md:h-9'} w-full overflow-hidden whitespace-nowrap text-[#1a1a1a] shadow-md`}>

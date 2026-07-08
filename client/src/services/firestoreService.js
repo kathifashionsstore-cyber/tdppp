@@ -86,6 +86,10 @@ export const subscribeDocuments = (collectionName, options = {}, callback, onErr
   }, onError);
 };
 
+export const subscribeDocument = (collectionName, id, callback, onError) => onSnapshot(doc(db, collectionName, id), (snap) => {
+  callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+}, onError);
+
 export const trackCollectionView = async (collectionName, id) => {
   if (!id) return;
   await updateDoc(doc(db, collectionName, id), { views: increment(1) }).catch(() => {});
@@ -105,5 +109,6 @@ export const collectionsApi = {
   updateDocument,
   deleteDocument,
   listDocuments,
-  subscribeDocuments
+  subscribeDocuments,
+  subscribeDocument
 };
