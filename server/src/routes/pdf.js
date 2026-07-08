@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { mkdirSync } from 'fs';
 import fs from 'fs/promises';
 import admin, { getAdminDb } from '../services/firebaseAdmin.js';
+import axios from 'axios';
 
 const router = Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +15,16 @@ const MAX_PDF_BYTES = 100 * 1024 * 1024;
 const PDF_COLLECTION = 'pdfDocuments';
 const DISPLAY_COLLECTION = 'pdfDisplay';
 const DISPLAY_DOC = 'current';
+
+export const extractDriveFileId = (url = '') => {
+  const reg1 = /\/file\/d\/([a-zA-Z0-9_-]+)/;
+  const reg2 = /[?&]id=([a-zA-Z0-9_-]+)/;
+  const match1 = String(url).match(reg1);
+  if (match1) return match1[1];
+  const match2 = String(url).match(reg2);
+  if (match2) return match2[1];
+  return null;
+};
 
 mkdirSync(uploadRoot, { recursive: true });
 
@@ -241,6 +252,126 @@ router.delete('/current', requirePdfAdmin, async (_req, res, next) => {
   }
 });
 
+router.post('/validate-drive', requirePdfAdmin, async (req, res, next) => {
+  const { url } = req.body;
+  const fileId = extractDriveFileId(url);
+  if (!fileId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid Google Drive link format.'
+    });
+  }
+  try {
+    const driveDownloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    const response = await axios({
+      method: 'get',
+      url: driveDownloadUrl,
+      responseType: 'stream',
+      maxRedirects: 5,
+      validateStatus: () => true
+    });
+    
+    const finalUrl = response.request?.res?.responseUrl || '';
+    const contentType = response.headers['content-type'] || '';
+    const isHtml = contentType.includes('text/html');
+    
+    // Destroy the stream immediately to save bandwidth
+    if (response.data) response.data.destroy();
+    
+    if (finalUrl.includes('accounts.google.com') || isHtml || response.status === 403 || response.status === 404) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google Drive file is not publicly accessible. Please set file sharing permission to "Anyone with the link – Viewer".'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      fileId,
+      message: 'Link is valid and accessible.'
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: 'Failed to access Google Drive file. Ensure the link is correct and public.',
+      error: error.message
+    });
+  }
+});
+
+router.post('/save-drive', requirePdfAdmin, async (req, res, next) => {
+  try {
+    const { title, description, category, driveUrl, pages, thumbnail } = req.body;
+    const fileId = extractDriveFileId(driveUrl);
+    if (!fileId) return res.status(400).json({ error: 'Invalid Google Drive link.' });
+    
+    const relativePath = `/api/pdf/proxy/${fileId}`;
+    const payload = {
+      title: String(title || 'Google Drive PDF').trim(),
+      description: String(description || '').trim(),
+      category: String(category || '').trim(),
+      sourceType: 'drive',
+      driveUrl,
+      fileId,
+      filename: 'google-drive-file.pdf',
+      filepath: relativePath,
+      fileUrl: `${getBaseUrl(req)}${relativePath}`,
+      thumbnail: thumbnail || '',
+      filesize: 0,
+      pages: Math.max(1, Math.round(Number(pages) || 1)),
+      status: 'active',
+      isActive: true,
+      isDisplaying: false,
+      createdAt: timestamp(),
+      updatedAt: timestamp()
+    };
+    
+    const ref = await getAdminDb().collection(PDF_COLLECTION).add(payload);
+    const snap = await ref.get();
+    return res.status(201).json({ pdf: normalizePdf(serializePdf(snap)) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/proxy/:fileId', async (req, res, next) => {
+  const { fileId } = req.params;
+  if (!fileId || !/^[a-zA-Z0-9_-]+$/.test(fileId)) {
+    return res.status(400).json({ error: 'Invalid Google Drive file ID.' });
+  }
+  
+  try {
+    const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    console.log(`[PDF Proxy] Fetching Google Drive file ID: ${fileId}`);
+    
+    const response = await axios({
+      method: 'get',
+      url: driveUrl,
+      responseType: 'stream',
+      maxRedirects: 5
+    });
+
+    const contentType = response.headers['content-type'];
+    if (contentType && contentType.includes('text/html')) {
+      console.warn(`[PDF Proxy] Failed: File is private or login page returned.`);
+      return res.status(403).json({
+        success: false,
+        message: 'Google Drive file is not publicly accessible. Ensure it is shared with "Anyone with the link - Viewer".'
+      });
+    }
+
+    res.setHeader('Content-Type', contentType || 'application/pdf');
+    if (response.headers['content-length']) {
+      res.setHeader('Content-Length', response.headers['content-length']);
+    }
+    
+    response.data.pipe(res);
+  } catch (error) {
+    console.error(`[PDF Proxy] Exception fetching file:`, error.message);
+    res.status(500).json({ error: 'Failed to proxy Google Drive file.' });
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const snap = await getAdminDb().collection(PDF_COLLECTION).doc(req.params.id).get();
@@ -262,6 +393,19 @@ router.put('/:id', requirePdfAdmin, async (req, res, next) => {
       const isActive = req.body.isActive ?? req.body.status !== 'inactive';
       data.isActive = !!isActive;
       data.status = isActive ? 'active' : 'inactive';
+    }
+    if ('driveUrl' in req.body) {
+      const url = String(req.body.driveUrl || '').trim();
+      data.driveUrl = url;
+      if (url) {
+        const fileId = extractDriveFileId(url);
+        if (fileId) {
+          data.fileId = fileId;
+          data.sourceType = 'drive';
+          data.filepath = `/api/pdf/proxy/${fileId}`;
+          data.fileUrl = `${getBaseUrl(req)}/api/pdf/proxy/${fileId}`;
+        }
+      }
     }
     data.updatedAt = timestamp();
     await getAdminDb().collection(PDF_COLLECTION).doc(req.params.id).set(data, { merge: true });

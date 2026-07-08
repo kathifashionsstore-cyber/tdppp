@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CheckCircle2, ChevronLeft, ChevronRight, Eye, FileText, Loader2, MonitorPlay, Pause, RefreshCw, Search, Trash2, UploadCloud, X } from 'lucide-react';
-import { clearPdfDisplay, deletePdf, displayPdf, fetchCurrentPdf, fetchPdfs, getPdfFileUrl, stopPdfDisplay, updatePdf, uploadPdf } from '@/services/pdfApi';
+import { clearPdfDisplay, deletePdf, displayPdf, fetchCurrentPdf, fetchPdfs, getPdfFileUrl, stopPdfDisplay, updatePdf, uploadPdf, validateDrivePdf, saveDrivePdf } from '@/services/pdfApi';
 import { getPdfDetails } from '@/utils/pdfRenderer';
 import { confirmToast, toastError, toastSuccess } from '@/utils/toastUtils.jsx';
 
@@ -30,6 +30,9 @@ const ManagePdf = () => {
   const [editing, setEditing] = useState(null);
   const [previewing, setPreviewing] = useState(null);
   const [displaySettings, setDisplaySettings] = useState({ autoChangeSeconds: 8, loop: true, showPageNumber: true });
+  const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'drive'
+  const [driveUrl, setDriveUrl] = useState('');
+  const [isVerifyingDrive, setIsVerifyingDrive] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -127,6 +130,93 @@ const ManagePdf = () => {
     }
   };
 
+  const extractFileId = (url = '') => {
+    const reg1 = /\/file\/d\/([a-zA-Z0-9_-]+)/;
+    const reg2 = /[?&]id=([a-zA-Z0-9_-]+)/;
+    const match1 = String(url).match(reg1);
+    if (match1) return match1[1];
+    const match2 = String(url).match(reg2);
+    if (match2) return match2[1];
+    return null;
+  };
+
+  const verifyAndLoadDrivePdf = async () => {
+    if (!driveUrl) return toast.error('Please enter a Google Drive link.');
+    const fileId = extractFileId(driveUrl);
+    if (!fileId) return toast.error('Invalid Google Drive link format.');
+
+    setIsVerifyingDrive(true);
+    try {
+      // 1. Validate public access
+      await validateDrivePdf(driveUrl);
+      
+      // 2. Fetch the file via the proxy to generate page count & thumbnail
+      toast.loading('Downloading file details...', { id: 'drive-loading' });
+      
+      const clientBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_SERVER_URL ? `${import.meta.env.VITE_SERVER_URL}/api` : '');
+      const proxyUrl = clientBase ? `${clientBase}/pdf/proxy/${fileId}` : `/api/pdf/proxy/${fileId}`;
+      
+      const response = await fetch(proxyUrl);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Failed to download file from proxy.');
+      }
+      
+      const blob = await response.blob();
+      const file = new File([blob], 'google-drive-file.pdf', { type: 'application/pdf' });
+      
+      toast.dismiss('drive-loading');
+      toast.success('File loaded. Parsing details...');
+      
+      await chooseFile(file);
+    } catch (error) {
+      toast.dismiss('drive-loading');
+      toastError(error, 'Failed to load Google Drive PDF');
+    } finally {
+      setIsVerifyingDrive(false);
+    }
+  };
+
+  const saveDrive = async (event) => {
+    event.preventDefault();
+    if (!driveUrl) return toast.error('Enter a Google Drive link.');
+    const fileId = extractFileId(driveUrl);
+    if (!fileId) return toast.error('Invalid Google Drive link format.');
+    if (!pdfMeta.pages) return toast.error('Please click "Verify & Load PDF" first to validate the document.');
+
+    setIsUploading(true);
+    try {
+      await saveDrivePdf({
+        title: form.title || 'Google Drive PDF',
+        description: form.description || '',
+        category: form.category || '',
+        driveUrl,
+        pages: pdfMeta.pages,
+        thumbnail: pdfMeta.thumbnail
+      });
+      toastSuccess('Google Drive PDF saved successfully');
+      setDriveUrl('');
+      setPdfMeta({ pages: 0, thumbnail: '' });
+      setForm(emptyForm);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl('');
+      setPage(1);
+      await loadData();
+    } catch (error) {
+      toastError(error, 'Failed to save Google Drive PDF');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFormSubmit = (event) => {
+    if (activeTab === 'upload') {
+      saveUpload(event);
+    } else {
+      saveDrive(event);
+    }
+  };
+
   const removePdf = async (pdf) => {
     const confirmed = await confirmToast({
       title: 'Delete PDF?',
@@ -158,7 +248,8 @@ const ManagePdf = () => {
       await updatePdf(editing.id, {
         title: editing.title,
         description: editing.description,
-        category: editing.category
+        category: editing.category,
+        driveUrl: editing.driveUrl
       });
       setEditing(null);
       toastSuccess('PDF updated');
@@ -216,35 +307,78 @@ const ManagePdf = () => {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <form onSubmit={saveUpload} className="rounded-2xl border border-white/70 bg-white/75 p-4 shadow-sm backdrop-blur md:p-5">
+        <form onSubmit={handleFormSubmit} className="rounded-2xl border border-white/70 bg-white/75 p-4 shadow-sm backdrop-blur md:p-5">
           <div className="mb-4">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-tdp-red">Upload PDF</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-tdp-red">Manage PDF</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">New document</h2>
           </div>
 
-          <label
-            onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            className={`grid min-h-48 cursor-pointer place-items-center rounded-2xl border-2 border-dashed p-5 text-center transition ${isDragging ? 'border-tdp-yellow bg-yellow-50' : 'border-slate-300 bg-slate-50 hover:border-tdp-yellow'}`}
-          >
-            <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => chooseFile(event.target.files?.[0])} />
-            <span className="grid gap-3 justify-items-center">
-              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-tdp-yellow"><UploadCloud size={26} /></span>
-              <span className="text-base font-black text-slate-950">{selectedFile ? selectedFile.name : 'Drag & drop PDF or click to upload'}</span>
-              <span className="text-sm font-semibold text-slate-500">PDF only, up to 100 MB</span>
-            </span>
-          </label>
+          <div className="mb-4 flex border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => { setActiveTab('upload'); setSelectedFile(null); setDriveUrl(''); setPdfMeta({ pages: 0, thumbnail: '' }); setForm(emptyForm); }}
+              className={`pb-2 pr-4 text-sm font-black border-b-2 transition ${activeTab === 'upload' ? 'border-tdp-red text-tdp-red' : 'border-transparent text-slate-500'}`}
+            >
+              Upload File
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('drive'); setSelectedFile(null); setDriveUrl(''); setPdfMeta({ pages: 0, thumbnail: '' }); setForm(emptyForm); }}
+              className={`pb-2 px-4 text-sm font-black border-b-2 transition ${activeTab === 'drive' ? 'border-tdp-red text-tdp-red' : 'border-transparent text-slate-500'}`}
+            >
+              Google Drive Link
+            </button>
+          </div>
 
-          {selectedFile && (
+          {activeTab === 'upload' ? (
+            <label
+              onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              className={`grid min-h-48 cursor-pointer place-items-center rounded-2xl border-2 border-dashed p-5 text-center transition ${isDragging ? 'border-tdp-yellow bg-yellow-50' : 'border-slate-300 bg-slate-50 hover:border-tdp-yellow'}`}
+            >
+              <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => chooseFile(event.target.files?.[0])} />
+              <span className="grid gap-3 justify-items-center">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-tdp-yellow"><UploadCloud size={26} /></span>
+                <span className="text-base font-black text-slate-950">{selectedFile ? selectedFile.name : 'Drag & drop PDF or click to upload'}</span>
+                <span className="text-sm font-semibold text-slate-500">PDF only, up to 100 MB</span>
+              </span>
+            </label>
+          ) : (
+            <div className="grid gap-3">
+              <label className="grid gap-1 text-sm font-black text-slate-700">
+                Google Drive Share Link
+                <input
+                  value={driveUrl}
+                  onChange={(event) => setDriveUrl(event.target.value)}
+                  placeholder="https://drive.google.com/file/d/.../view"
+                  className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={isVerifyingDrive || !driveUrl}
+                onClick={verifyAndLoadDrivePdf}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-4 text-sm font-black text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              >
+                {isVerifyingDrive ? <Loader2 size={16} className="animate-spin" /> : null}
+                {isVerifyingDrive ? 'Verifying Link...' : 'Verify & Load PDF'}
+              </button>
+            </div>
+          )}
+
+          {pdfMeta.pages > 0 && (
             <div className="mt-4 grid gap-3 rounded-xl bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3 text-sm font-bold text-slate-600">
-                <span>{selectedFileSize}</span>
-                <span>{isPreparing ? 'Preparing thumbnail...' : `${pdfMeta.pages || 'Unknown'} pages`}</span>
+                <span>{activeTab === 'upload' ? selectedFileSize : 'Google Drive PDF'}</span>
+                <span>{pdfMeta.pages} pages</span>
               </div>
               {pdfMeta.thumbnail && <img src={pdfMeta.thumbnail} alt="" className="max-h-48 w-full rounded-lg border border-slate-200 bg-white object-contain" />}
-              {isPreparing && <div className="h-24 animate-pulse rounded-lg bg-slate-200" />}
             </div>
+          )}
+
+          {isPreparing && activeTab === 'upload' && (
+            <div className="mt-4 h-24 animate-pulse rounded-lg bg-slate-200" />
           )}
 
           <div className="mt-4 grid gap-3">
@@ -262,7 +396,7 @@ const ManagePdf = () => {
             </label>
           </div>
 
-          {isUploading && (
+          {isUploading && activeTab === 'upload' && (
             <div className="mt-4">
               <div className="mb-1 flex justify-between text-xs font-black uppercase tracking-[0.12em] text-slate-500"><span>Uploading</span><span>{uploadProgress}%</span></div>
               <div className="h-3 overflow-hidden rounded-full bg-slate-200">
@@ -271,8 +405,12 @@ const ManagePdf = () => {
             </div>
           )}
 
-          <button disabled={isUploading || isPreparing || !selectedFile} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 text-base font-black text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none">
-            {isUploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />} {isUploading ? 'Uploading...' : 'Upload PDF'}
+          <button
+            disabled={activeTab === 'upload' ? (isUploading || isPreparing || !selectedFile) : (isUploading || isVerifyingDrive || !pdfMeta.pages)}
+            className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-tdp-red px-5 text-base font-black text-white shadow-red disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
+          >
+            {isUploading ? <Loader2 size={18} className="animate-spin" /> : (activeTab === 'upload' ? <UploadCloud size={18} /> : null)} 
+            {isUploading ? 'Saving...' : (activeTab === 'upload' ? 'Upload PDF' : 'Save Google Drive PDF')}
           </button>
         </form>
 
@@ -368,6 +506,12 @@ const ManagePdf = () => {
       {editing && (
         <PdfModal title="Edit PDF" onClose={() => setEditing(null)}>
           <form onSubmit={saveEdit} className="grid gap-4">
+            {editing.sourceType === 'drive' && (
+              <label className="grid gap-1 text-sm font-black text-slate-700">
+                Google Drive URL
+                <input value={editing.driveUrl || ''} onChange={(event) => setEditing((state) => ({ ...state, driveUrl: event.target.value }))} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />
+              </label>
+            )}
             <label className="grid gap-1 text-sm font-black text-slate-700">
               Title
               <input value={editing.title || ''} onChange={(event) => setEditing((state) => ({ ...state, title: event.target.value }))} className="min-h-12 rounded-xl border border-slate-200 px-4 text-base outline-none focus:border-tdp-yellow" />

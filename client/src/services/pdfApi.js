@@ -27,11 +27,13 @@ const parseResponse = async (response) => {
 
 export const getPdfFileUrl = (pdf) => {
   if (!pdf) return '';
+  if (pdf.filepath) {
+    if (/^https?:\/\//i.test(pdf.filepath)) return pdf.filepath;
+    const origin = API_BASE.replace(/\/api\/?$/, '');
+    return `${origin}${pdf.filepath}`;
+  }
   if (pdf.fileUrl) return pdf.fileUrl;
-  if (!pdf.filepath) return '';
-  if (/^https?:\/\//i.test(pdf.filepath)) return pdf.filepath;
-  const origin = API_BASE.replace(/\/api\/?$/, '');
-  return `${origin}${pdf.filepath}`;
+  return '';
 };
 
 export const fetchPdfs = async ({ search = '', sort = 'latest', page = 1, limit = 10 } = {}) => {
@@ -95,4 +97,16 @@ export const stopPdfDisplay = async () => parseResponse(await fetch(`${API_BASE}
 export const clearPdfDisplay = async () => parseResponse(await fetch(`${API_BASE}/pdf/current`, {
   method: 'DELETE',
   headers: await getAuthHeaders()
+}));
+
+export const validateDrivePdf = async (url) => parseResponse(await fetch(`${API_BASE}/pdf/validate-drive`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+  body: JSON.stringify({ url })
+}));
+
+export const saveDrivePdf = async (data) => parseResponse(await fetch(`${API_BASE}/pdf/save-drive`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+  body: JSON.stringify(data)
 }));
