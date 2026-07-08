@@ -1,6 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // SECURITY WARNING: Almost all write operations in this application require an authenticated user (request.auth != null).
+    // If you log in locally using the mock bypass credentials (tdpadmin / tdpadmin), the client SDK requests will have request.auth == null.
+    // For local offline development with the mock credentials, you can temporarily change write rules to "allow write: if true;" in your local emulator or console.
+    // NEVER deploy "allow write: if true;" to production, as it opens your database to public manipulation.
+    // For production, always create a real admin user in the Firebase Auth console and sign in using those credentials.
+
     match /heroSections/{document} {
       allow read: if true;
       allow write: if request.auth != null;
