@@ -28,8 +28,39 @@ app.use('/api/pdf', pdfRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date() }));
 
-app.use((error, _req, res, _next) => {
-  res.status(error.status || 500).json({ error: error.message || 'Server error' });
+// Catch-all 404 handler for API routes to avoid HTML responses
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API Route not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
+// Global 404 handler for any other unhandled routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
+// Global error handler
+app.use((error, req, res, _next) => {
+  const status = error.status || error.statusCode || 500;
+  
+  // Custom response format for PDF upload route failures (e.g. multer file size errors)
+  if (req.path === '/api/pdf/upload' || req.originalUrl === '/api/pdf/upload') {
+    return res.status(status).json({
+      success: false,
+      message: 'PDF upload failed',
+      error: error.message || 'Server error'
+    });
+  }
+
+  res.status(status).json({
+    success: false,
+    error: error.message || 'Server error'
+  });
 });
 
 const port = process.env.PORT || 3001;

@@ -1,6 +1,12 @@
 import { auth } from '@/services/firebase';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
+const getApiBase = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_SERVER_URL ? `${import.meta.env.VITE_SERVER_URL}/api` : '');
+  if (envUrl) return envUrl;
+  return import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
+};
+
+const API_BASE = getApiBase();
 
 const getAuthHeaders = async () => {
   if (auth.currentUser) return { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` };
@@ -9,8 +15,13 @@ const getAuthHeaders = async () => {
 };
 
 const parseResponse = async (response) => {
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'PDF request failed');
+  const contentType = response.headers.get('content-type');
+  if (!contentType?.includes('application/json')) {
+    const text = await response.text();
+    throw new Error(text || `Request failed with status ${response.status}`);
+  }
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || data.message || 'PDF request failed');
   return data;
 };
 
@@ -41,10 +52,15 @@ export const uploadPdf = async (formData, onProgress) => new Promise((resolve, r
       if (event.lengthComputable && onProgress) onProgress(Math.round((event.loaded / event.total) * 100));
     };
     xhr.onload = () => {
+      const contentType = xhr.getResponseHeader('content-type');
+      if (!contentType?.includes('application/json')) {
+        reject(new Error(xhr.responseText || `Upload failed with status ${xhr.status}`));
+        return;
+      }
       try {
         const data = JSON.parse(xhr.responseText || '{}');
         if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-        else reject(new Error(data.error || 'PDF upload failed'));
+        else reject(new Error(data.error || data.message || 'PDF upload failed'));
       } catch (error) {
         reject(error);
       }

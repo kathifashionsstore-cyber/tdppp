@@ -45,11 +45,21 @@ const requirePdfAdmin = async (req, res, next) => {
   try {
     if (allowLocalAdmin(req)) return next();
     const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ error: 'Missing token' });
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+        error: 'Missing token'
+      });
+    }
     req.user = await admin.auth().verifyIdToken(token);
     return next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized',
+      error: error.message || 'Invalid token'
+    });
   }
 };
 
@@ -94,8 +104,25 @@ const listPdfs = async () => {
 };
 
 router.post('/upload', requirePdfAdmin, upload.single('file'), async (req, res, next) => {
+  console.log(`[PDF Upload] Request received: POST /api/pdf/upload`);
   try {
-    if (!req.file) return res.status(400).json({ error: 'PDF file is required.' });
+    if (!req.file) {
+      console.warn(`[PDF Upload] Validation failed: No file uploaded`);
+      return res.status(400).json({
+        success: false,
+        message: 'PDF upload failed',
+        error: 'PDF file is required.'
+      });
+    }
+
+    console.log(`[PDF Upload] Uploaded filename: ${req.file.originalname}`);
+    console.log(`[PDF Upload] Stored filename: ${req.file.filename}`);
+    console.log(`[PDF Upload] File size: ${req.file.size} bytes`);
+    console.log(`[PDF Upload] Save location: ${req.file.path}`);
+    
+    const pages = Math.max(0, Math.round(Number(req.body.pages) || 0));
+    console.log(`[PDF Upload] PDF page count: ${pages}`);
+
     const relativePath = `/uploads/pdfs/${req.file.filename}`;
     const payload = {
       title: String(req.body.title || req.file.originalname.replace(/\.pdf$/i, '')).trim(),
@@ -107,19 +134,48 @@ router.post('/upload', requirePdfAdmin, upload.single('file'), async (req, res, 
       fileUrl: `${getBaseUrl(req)}${relativePath}`,
       thumbnail: req.body.thumbnail || '',
       filesize: req.file.size,
-      pages: Math.max(0, Math.round(Number(req.body.pages) || 0)),
+      pages,
       status: 'active',
       isActive: true,
       isDisplaying: false,
       createdAt: timestamp(),
       updatedAt: timestamp()
     };
-    const ref = await getAdminDb().collection(PDF_COLLECTION).add(payload);
+
+    const db = getAdminDb();
+    console.log(`[PDF Upload] Saving document metadata to Firestore collection: ${PDF_COLLECTION}`);
+    const ref = await db.collection(PDF_COLLECTION).add(payload);
+    console.log(`[PDF Upload] Database insert result: Success, Document ID: ${ref.id}`);
+    
     const snap = await ref.get();
-    return res.status(201).json({ pdf: normalizePdf(serializePdf(snap)) });
+    const pdfData = normalizePdf(serializePdf(snap));
+
+    return res.status(201).json({
+      success: true,
+      message: 'PDF uploaded successfully',
+      pdf: {
+        id: pdfData.id,
+        title: pdfData.title,
+        filename: pdfData.filename,
+        pages: pdfData.pages
+      }
+    });
   } catch (error) {
-    if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});
-    return next(error);
+    console.error(`[PDF Upload] Exception during upload processing:`);
+    console.error(error.stack || error);
+
+    if (req.file?.path) {
+      console.log(`[PDF Upload] Cleaning up file: ${req.file.path}`);
+      await fs.unlink(req.file.path).catch((err) => {
+        console.error(`[PDF Upload] Failed to clean up file: ${err.message}`);
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'PDF upload failed',
+      error: error.message || 'Internal Server Error'
+    });
   }
 });
 
