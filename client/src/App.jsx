@@ -11,6 +11,7 @@ const Home = lazy(() => import('@/pages/public/Home'));
 const About = lazy(() => import('@/pages/public/About'));
 const DailyWork = lazy(() => import('@/pages/public/DailyWork'));
 const TVDisplay = lazy(() => import('@/pages/public/TVDisplay'));
+const PdfTvDisplay = lazy(() => import('@/pages/public/PdfTvDisplay'));
 const Gallery = lazy(() => import('@/pages/public/Gallery'));
 const Schemes = lazy(() => import('@/pages/public/Schemes'));
 const Super6 = lazy(() => import('@/pages/public/Super6'));
@@ -25,6 +26,7 @@ const ManageHome = lazy(() => import('@/pages/admin/ManageHome'));
 const ManageLeaders = lazy(() => import('@/pages/admin/ManageLeaders'));
 const ManageHero = lazy(() => import('@/pages/admin/ManageHero'));
 const ManageDailyWork = lazy(() => import('@/pages/admin/ManageDailyWork'));
+const ManagePdf = lazy(() => import('@/pages/admin/ManagePdf'));
 const ManageGallery = lazy(() => import('@/pages/admin/ManageGallery'));
 const ManageNews = lazy(() => import('@/pages/admin/ManageNews'));
 const ManageSchemes = lazy(() => import('@/pages/admin/ManageSchemes'));
@@ -60,6 +62,8 @@ const App = () => {
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route path="/tv" element={<TVDisplay />} />
+              <Route path="/tv/pdf" element={<PdfTvDisplay />} />
+              <Route path="/pdf" element={<Navigate to="/admin/pdf" replace />} />
               <Route element={<Layout />}>
                 <Route index element={<Page><Home /></Page>} />
                 <Route path="about" element={<Navigate to="/narasaraopet" replace />} />
@@ -86,6 +90,7 @@ const App = () => {
                 <Route path="hero" element={<ManageHero />} />
                 <Route path="page-heroes" element={<ManageHero />} />
                 <Route path="daily-work" element={<ManageDailyWork />} />
+                <Route path="pdf" element={<ManagePdf />} />
                 <Route path="achievements" element={<Navigate to="/admin/dashboard" replace />} />
                 <Route path="news" element={<ManageNews />} />
                 <Route path="super6" element={<ManageSuper6 />} />

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Flag, Home, Images, Landmark, LayoutDashboard, LogOut, Mail, Megaphone, Newspaper, Settings, Sparkles, Star, Users, Vote } from 'lucide-react';
+import { BarChart3, FileText, Flag, Home, Images, Landmark, LayoutDashboard, LogOut, Mail, Megaphone, Newspaper, Settings, Sparkles, Star, Users, Vote } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const items = [
@@ -9,6 +9,7 @@ const items = [
   { label: 'Page Hero Banners', path: '/admin/page-heroes', icon: Sparkles },
   { label: 'Leaders', path: '/admin/leaders', icon: Users },
   { label: 'Daily Work', path: '/admin/daily-work', icon: Vote },
+  { label: 'PDF TV Display', path: '/admin/pdf', icon: FileText },
   { label: 'News', path: '/admin/news', icon: Newspaper },
   { label: 'Gallery', path: '/admin/gallery', icon: Images },
   { label: 'Super 6 Schemes', path: '/admin/super6', icon: Star },

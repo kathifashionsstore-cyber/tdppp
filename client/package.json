@@ -21,6 +21,7 @@
     "framer-motion": "^11.3.0",
     "i18next": "^23.12.2",
     "lucide-react": "^0.411.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-datepicker": "^7.3.0",
     "react-dom": "^18.3.1",
