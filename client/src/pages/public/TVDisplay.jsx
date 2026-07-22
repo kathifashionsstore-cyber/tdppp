@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Clock3, FileText, ImageOff, Maximize2, Minimize2, Pause, Play, RefreshCw, Sparkles } from 'lucide-react';
+import { CheckCircle2, Clock3, FileText, ImageOff, Maximize2, Minimize2, Pause, Play, RefreshCw, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useRealtimeCollection, useRealtimeDoc } from '@/hooks/useFirestore';
 import {
   getEntryTvPhotos,
@@ -234,7 +234,15 @@ const TVDisplay = () => {
     >
       <TopTicker messages={tickerMessages} />
 
-      <BroadcastHeader clock={clock} date={scheduleDate} />
+      <BroadcastHeader
+        clock={clock}
+        date={scheduleDate}
+        isPaused={isPaused}
+        onTogglePause={() => setIsPaused((v) => !v)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onRefresh={() => window.location.reload()}
+      />
 
       <section className="tv-broadcast-body grid min-h-0 grid-cols-[32%_68%] overflow-hidden">
         <aside className={`tv-left-panel tv-news-left-panel relative flex min-h-0 min-w-0 flex-col overflow-hidden px-5 py-4 ${panelFlash ? 'is-flashing' : ''}`}>
@@ -272,75 +280,117 @@ const TVDisplay = () => {
       </section>
 
       <BottomTicker messages={tickerMessages} />
-
-      {/* Professional TV Controls Toolbar */}
-      <TVControlsToolbar
-        isPaused={isPaused}
-        onTogglePause={() => setIsPaused((v) => !v)}
-        isFullscreen={isFullscreen}
-        onToggleFullscreen={toggleFullscreen}
-        onRefresh={() => window.location.reload()}
-        showControls={showControls}
-      />
     </main>
   );
 };
 
-const TVControlsToolbar = ({ isPaused, onTogglePause, isFullscreen, onToggleFullscreen, onRefresh, showControls }) => (
-  <aside
-    aria-label="టీవీ నియంత్రణలు"
-    className={`tv-controls-floating fixed bottom-12 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${showControls ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-4 scale-95 pointer-events-none'}`}
-  >
-    <div className="flex items-center gap-3 rounded-2xl border border-yellow-500/40 bg-[#080812]/92 px-4 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-      <div className="flex items-center gap-2 pr-3 border-r border-white/15">
-        <span className="relative flex h-2.5 w-2.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+const TVControlsToolbar = ({ isPaused, onTogglePause, isFullscreen, onToggleFullscreen, onRefresh }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="relative z-50 ml-1 flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center gap-2 rounded-xl border-2 border-yellow-400/80 bg-[#0a0005]/95 px-3 py-1.5 shadow-lg backdrop-blur-md transition hover:bg-yellow-400/20 hover:scale-105 active:scale-95"
+        title="టీవీ నియంత్రణలు (TV Controls)"
+      >
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
         </span>
-        <span className="telugu text-xs font-black tracking-wide text-white/90">సజీవ ప్రసారం • 4K</span>
-      </div>
-
-      <button
-        type="button"
-        onClick={onTogglePause}
-        className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white transition hover:bg-yellow-500/25 hover:text-tdp-yellow"
-        title="స్ペース Key"
-      >
-        {isPaused ? <Play size={13} className="text-tdp-yellow" /> : <Pause size={13} />}
-        <span>{isPaused ? 'ప్రారంభించు' : 'నిలుపు'}</span>
+        <SlidersHorizontal size={14} className="text-tdp-yellow" />
+        <span className="telugu text-xs font-black text-white">నియంత్రణలు</span>
       </button>
 
-      <button
-        type="button"
-        onClick={onToggleFullscreen}
-        className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white transition hover:bg-yellow-500/25 hover:text-tdp-yellow"
-        title="F Key"
-      >
-        {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-        <span>{isFullscreen ? 'చిన్నది' : 'స్క్రీన్ నింపు'}</span>
-      </button>
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-2 z-50 flex flex-col gap-2 rounded-2xl border-2 border-yellow-400/90 bg-[#0c0006]/98 p-3.5 shadow-[0_15px_45px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200 min-w-[260px]">
+          <div className="flex items-center justify-between border-b border-white/20 pb-2 px-1">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={15} className="text-tdp-yellow" />
+              <span className="telugu text-xs font-black text-tdp-yellow">టీవీ నియంత్రణలు (TV Controls)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="grid h-6 w-6 place-items-center rounded-lg bg-white/10 text-white/80 hover:bg-red-600 hover:text-white transition"
+              aria-label="మూసివేయి"
+            >
+              <X size={14} />
+            </button>
+          </div>
 
-      <a
-        href="/tv/pdf"
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center gap-1.5 rounded-xl bg-yellow-500/20 border border-yellow-500/40 px-3 py-1.5 text-xs font-black text-tdp-yellow transition hover:bg-yellow-500 hover:text-black"
-      >
-        <FileText size={13} />
-        <span>PDF ప్రసారం</span>
-      </a>
+          <div className="flex flex-col gap-2 mt-1">
+            <button
+              type="button"
+              onClick={() => {
+                onToggleFullscreen();
+                setIsOpen(false);
+              }}
+              className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-black text-white transition hover:bg-yellow-400/30 hover:text-tdp-yellow text-left active:scale-95"
+            >
+              {isFullscreen ? <Minimize2 size={15} className="text-tdp-yellow" /> : <Maximize2 size={15} className="text-tdp-yellow" />}
+              <span className="telugu">{isFullscreen ? 'చిన్నది (Exit Fullscreen)' : 'ఫుల్ స్క్రీన్ (Full Screen)'}</span>
+            </button>
 
-      <button
-        type="button"
-        onClick={onRefresh}
-        className="grid h-7 w-7 place-items-center rounded-xl bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
-        title="R Key"
-      >
-        <RefreshCw size={13} />
-      </button>
+            <a
+              href="/tv/pdf"
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-2.5 rounded-xl bg-red-600/90 border border-yellow-400/70 px-3.5 py-2 text-xs font-black text-white transition hover:bg-red-600 hover:text-tdp-yellow shadow-md active:scale-95"
+            >
+              <FileText size={15} className="text-tdp-yellow" />
+              <span className="telugu">PDF ప్రసారం (PDF Display)</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => {
+                onTogglePause();
+                setIsOpen(false);
+              }}
+              className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-black text-white transition hover:bg-yellow-400/30 hover:text-tdp-yellow text-left active:scale-95"
+            >
+              {isPaused ? <Play size={15} className="text-tdp-yellow fill-tdp-yellow" /> : <Pause size={15} className="fill-white" />}
+              <span className="telugu">{isPaused ? 'ప్లే (Play Slideshow)' : 'పాజ్ (Pause Slideshow)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                onRefresh();
+                setIsOpen(false);
+              }}
+              className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-black text-white transition hover:bg-white/20 hover:text-tdp-yellow text-left active:scale-95"
+            >
+              <RefreshCw size={15} className="text-white/90" />
+              <span className="telugu">రిఫ్రెష్ (Refresh Screen)</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-  </aside>
-);
+  );
+};
 
 const TopTicker = ({ messages }) => (
   <div className="tv-top-ticker">
@@ -375,19 +425,26 @@ const BottomTicker = ({ messages }) => (
   </div>
 );
 
-const BroadcastHeader = ({ clock, date }) => (
-  <header className="tv-broadcast-header relative grid min-h-0 grid-cols-[220px_minmax(0,1fr)_250px] items-center gap-4 overflow-hidden px-4">
+const BroadcastHeader = ({ clock, date, isPaused, onTogglePause, isFullscreen, onToggleFullscreen, onRefresh }) => (
+  <header className="tv-broadcast-header relative grid min-h-0 grid-cols-[360px_minmax(0,1fr)_250px] items-center gap-4 overflow-hidden px-4">
     <HeaderParticles />
-    <div className="relative z-10 flex items-center gap-4">
-      <div className="tv-logo-frame">
+    <div className="relative z-10 flex items-center gap-3">
+      <div className="tv-logo-frame flex-shrink-0">
         <span className="tv-logo-ring tv-logo-ring-outer" />
         <span className="tv-logo-ring tv-logo-ring-inner" />
         <img src="/logo.webp" alt="Telugu Desam Party" />
       </div>
-      <div className="min-w-0">
-        <p className="telugu text-[18px] font-black text-tdp-yellow drop-shadow-[0_0_10px_rgba(255,215,0,.75)]">తెలుగుదేశం పార్టీ</p>
-        <p className="telugu mt-1 text-[15px] font-black text-white/68">నరసరావుపేట</p>
+      <div className="min-w-0 flex-shrink">
+        <p className="telugu text-[16px] font-black text-tdp-yellow drop-shadow-[0_0_10px_rgba(255,215,0,.75)] leading-tight">తెలుగుదేశం పార్టీ</p>
+        <p className="telugu text-[13px] font-black text-white/70 leading-tight mt-0.5">నరసరావుపేట</p>
       </div>
+      <TVControlsToolbar
+        isPaused={isPaused}
+        onTogglePause={onTogglePause}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={onToggleFullscreen}
+        onRefresh={onRefresh}
+      />
     </div>
 
     <div className="relative z-10 min-w-0 text-center">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, FileText, Loader2, Maximize2, Minimize2, Pause, Play, RotateCcw, Tv } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Loader2, Maximize2, Minimize2, Pause, Play, RotateCcw, SlidersHorizontal, Tv, X } from 'lucide-react';
 import { fetchCurrentPdf, getPdfFileUrl } from '@/services/pdfApi';
 import { loadPdfDocument, renderPdfPageToCanvas } from '@/utils/pdfRenderer';
 
@@ -19,6 +19,8 @@ const PdfTvDisplay = () => {
   const [showControls, setShowControls] = useState(false);
   const [error, setError] = useState('');
   const [pollTick, setPollTick] = useState(0);
+  const [isControlsOpen, setIsControlsOpen] = useState(false);
+  const controlsContainerRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
 
   const settings = {
@@ -189,6 +191,22 @@ const PdfTvDisplay = () => {
     return () => window.removeEventListener('keydown', handleKey);
   }, [goNext, goPrevious, toggleFullscreen]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (controlsContainerRef.current && !controlsContainerRef.current.contains(event.target)) {
+        setIsControlsOpen(false);
+      }
+    };
+    if (isControlsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isControlsOpen]);
+
   return (
     <main
       onMouseMove={triggerControls}
@@ -197,22 +215,111 @@ const PdfTvDisplay = () => {
     >
       {/* Dynamic PDF Broadcast Header */}
       <header className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-none">
-        <div className="flex items-center gap-4 pointer-events-auto">
-          <div className="h-10 w-10 rounded-full border border-yellow-500/40 bg-white/90 p-1 shadow-[0_0_15px_rgba(255,215,0,0.4)]">
+        <div className="flex items-center gap-3 pointer-events-auto">
+          <div className="h-10 w-10 rounded-full border border-yellow-500/40 bg-white/90 p-1 shadow-[0_0_15px_rgba(255,215,0,0.4)] flex-shrink-0">
             <img src="/logo.webp" alt="TDP Logo" className="h-full w-full object-contain" />
           </div>
-          <div>
-            <h1 className="telugu text-lg font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+          <div className="flex-shrink">
+            <h1 className="telugu text-base font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] leading-tight">
               {current?.pdf?.title || 'తెలుగుదేశం పత్ర ప్రసారం'}
             </h1>
-            <p className="telugu text-xs font-bold text-tdp-yellow/90">
+            <p className="telugu text-xs font-bold text-tdp-yellow/90 leading-tight">
               నరసరావుపేట డిజిటల్ టీవీ ప్రదర్శన
             </p>
+          </div>
+
+          {/* Controls Button embedded in header after logo & title */}
+          <div ref={controlsContainerRef} className="relative z-50 ml-2 flex-shrink-0">
+            {!isControlsOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsControlsOpen(true)}
+                className="flex items-center gap-2 rounded-xl border-2 border-yellow-400/80 bg-[#0a0005]/95 px-3 py-1.5 shadow-lg backdrop-blur-md transition hover:bg-yellow-400/20 hover:scale-105 active:scale-95"
+                title="పత్ర నియంత్రణలు"
+              >
+                <SlidersHorizontal size={14} className="text-tdp-yellow" />
+                <span className="telugu text-xs font-black text-white">నియంత్రణలు</span>
+              </button>
+            ) : (
+              <div className="absolute top-full left-0 mt-2 z-50 flex flex-col gap-2 rounded-2xl border-2 border-yellow-400/90 bg-[#0c0006]/98 p-3.5 shadow-[0_15px_45px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200 min-w-[270px]">
+                <div className="flex items-center justify-between border-b border-white/20 pb-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal size={15} className="text-tdp-yellow" />
+                    <span className="telugu text-xs font-black text-tdp-yellow">పత్ర నియంత్రణలు (PDF Controls)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsControlsOpen(false)}
+                    className="grid h-6 w-6 place-items-center rounded-lg bg-white/10 text-white/80 hover:bg-red-600 hover:text-white transition"
+                    aria-label="మూసివేయి"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="flex items-center justify-between gap-2 rounded-xl bg-white/10 px-3 py-1.5">
+                    <button
+                      type="button"
+                      onClick={goPrevious}
+                      className="flex items-center gap-1 text-xs font-black text-white hover:text-tdp-yellow transition"
+                      title="Left Arrow Key"
+                    >
+                      <ChevronLeft size={16} />
+                      <span className="telugu">మునుపటి</span>
+                    </button>
+                    <span className="text-xs font-mono font-black text-tdp-yellow">{pageNumber} / {pageCount}</span>
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      className="flex items-center gap-1 text-xs font-black text-white hover:text-tdp-yellow transition"
+                      title="Right Arrow Key"
+                    >
+                      <span className="telugu">తరువాతి</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPaused((v) => !v);
+                      setIsControlsOpen(false);
+                    }}
+                    className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-black text-white transition hover:bg-yellow-400/30 hover:text-tdp-yellow active:scale-95 text-left"
+                  >
+                    {isPaused ? <Play size={15} className="text-tdp-yellow fill-tdp-yellow" /> : <Pause size={15} className="fill-white" />}
+                    <span className="telugu">{isPaused ? 'ప్లే (Play Document)' : 'పాజ్ (Pause Document)'}</span>
+                  </button>
+
+                  <a
+                    href="/tv"
+                    onClick={() => setIsControlsOpen(false)}
+                    className="flex items-center gap-2.5 rounded-xl bg-red-600/90 border border-yellow-400/70 px-3.5 py-2 text-xs font-black text-white transition hover:bg-red-600 hover:text-tdp-yellow active:scale-95 shadow-md"
+                  >
+                    <Tv size={15} className="text-tdp-yellow" />
+                    <span className="telugu">షెడ్యూల్ ప్రసారం (Live TV)</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleFullscreen();
+                      setIsControlsOpen(false);
+                    }}
+                    className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-black text-white transition hover:bg-white/20 hover:text-tdp-yellow active:scale-95 text-left"
+                  >
+                    {isFullscreen ? <Minimize2 size={15} className="text-tdp-yellow" /> : <Maximize2 size={15} className="text-tdp-yellow" />}
+                    <span className="telugu">{isFullscreen ? 'చిన్నది (Exit Fullscreen)' : 'ఫుల్ స్క్రీన్ (Full Screen)'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {current?.pdf && settings.showPageNumber && (
-          <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-black text-white/90 backdrop-blur-md">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-black text-white/90 backdrop-blur-md pointer-events-auto">
             <FileText size={15} className="text-tdp-yellow" />
             <span>పేజీ {pageNumber} / {pageCount || current.pdf.pages || 1}</span>
           </div>
@@ -248,60 +355,6 @@ const PdfTvDisplay = () => {
             {error}
           </div>
         )}
-
-        {/* Floating TV Controls */}
-        <aside
-          aria-label="పత్రం టీవీ నియంత్రణలు"
-          className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 ${showControls || isPaused ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-4 scale-95 pointer-events-none'}`}
-        >
-          <div className="flex items-center gap-3 rounded-2xl border border-yellow-500/40 bg-[#080812]/92 px-4 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-            <button
-              type="button"
-              onClick={goPrevious}
-              className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-white hover:bg-yellow-500/20 hover:text-tdp-yellow transition"
-              aria-label="మునుపటి పేజీ"
-            >
-              <ChevronLeft size={18} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsPaused((v) => !v)}
-              className="flex items-center gap-1.5 rounded-xl bg-tdp-yellow px-3.5 py-1.5 text-xs font-black text-black transition hover:bg-yellow-400"
-            >
-              {isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
-              <span>{isPaused ? 'ప్రారంభించు' : 'నిలుపు'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={goNext}
-              className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-white hover:bg-yellow-500/20 hover:text-tdp-yellow transition"
-              aria-label="తరువాతి పేజీ"
-            >
-              <ChevronRight size={18} />
-            </button>
-
-            <div className="h-4 w-px bg-white/15" />
-
-            <a
-              href="/tv"
-              className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white transition hover:bg-white/20"
-            >
-              <Tv size={13} />
-              <span>షెడ్యూల్ ప్రసారం</span>
-            </a>
-
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white transition hover:bg-white/20"
-            >
-              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              <span>{isFullscreen ? 'చిన్నది' : 'స్క్రీన్ నింపు'}</span>
-            </button>
-          </div>
-        </aside>
       </section>
     </main>
   );
