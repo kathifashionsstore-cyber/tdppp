@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Clock3, ImageOff, Play } from 'lucide-react';
+import { CheckCircle2, Clock3, FileText, ImageOff, Maximize2, Minimize2, Pause, Play, RefreshCw, Sparkles } from 'lucide-react';
 import { useRealtimeCollection, useRealtimeDoc } from '@/hooks/useFirestore';
 import {
   getEntryTvPhotos,
@@ -42,17 +42,67 @@ const TVDisplay = () => {
   const [slotIndex, setSlotIndex] = useState(0);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [loopHold, setLoopHold] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
+  const [showControls, setShowControls] = useState(false);
   const [panelFlash, setPanelFlash] = useState(false);
   const photoIntervalRef = useRef(null);
+  const controlsTimeoutRef = useRef(null);
 
   const { data: schedules = [], isLoading: schedulesLoading } = useRealtimeCollection('dailySchedules', { publishedOnly: true, orderByField: 'date', orderDirection: 'desc' });
   const { data: heroImages = [] } = useRealtimeCollection('heroImages_home', { activeOnly: true, orderByField: 'order', orderDirection: 'asc', limitCount: 10 });
   const { data: attendanceDoc } = useRealtimeDoc('tvAttendance', 'today');
 
+  // Clock timer
   useEffect(() => {
     const clockTimer = window.setInterval(() => setNow(new Date()), 1_000);
     return () => window.clearInterval(clockTimer);
   }, []);
+
+  // Screen Wake Lock API for 24/7 TV Displays
+  useEffect(() => {
+    let wakeLock = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch {
+        // ignore fallback
+      }
+    };
+    requestWakeLock();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      wakeLock?.release?.();
+    };
+  }, []);
+
+  // Fullscreen state listener
+  useEffect(() => {
+    const handleFs = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFs);
+    return () => document.removeEventListener('fullscreenchange', handleFs);
+  }, []);
+
+  // Auto-hiding control bar trigger
+  const triggerControls = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) window.clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = window.setTimeout(() => setShowControls(false), 3500);
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
 
   const attendance = useMemo(() => normalizeAttendance(attendanceDoc), [attendanceDoc]);
   const tickerMessages = attendance.tickerMessages;
@@ -99,13 +149,14 @@ const TVDisplay = () => {
     return () => window.clearTimeout(timer);
   }, [activeSlotKey]);
 
+  // Slideshow interval
   useEffect(() => {
     if (photoIntervalRef.current) {
       window.clearInterval(photoIntervalRef.current);
       photoIntervalRef.current = null;
     }
 
-    if (!activeSlotKey || loopHold || !currentPhotoCount) return undefined;
+    if (!activeSlotKey || loopHold || isPaused || !currentPhotoCount) return undefined;
 
     photoIntervalRef.current = window.setInterval(() => {
       setPhotoIndex((prevIndex) => {
@@ -134,7 +185,7 @@ const TVDisplay = () => {
         photoIntervalRef.current = null;
       }
     };
-  }, [activeSlotKey, currentPhotoCount, isFallbackPlaylist, isLastPlaybackSlot, loopHold, playableSlotCount]);
+  }, [activeSlotKey, currentPhotoCount, isFallbackPlaylist, isLastPlaybackSlot, isPaused, loopHold, playableSlotCount]);
 
   useEffect(() => {
     if (!loopHold) return undefined;
@@ -146,6 +197,29 @@ const TVDisplay = () => {
     return () => window.clearTimeout(timer);
   }, [loopHold]);
 
+  // Keyboard shortcuts (F, Space, Arrows, R)
+  useEffect(() => {
+    const handleKey = (event) => {
+      triggerControls();
+      if (event.key.toLowerCase() === 'f') toggleFullscreen();
+      if (event.key === ' ' || event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        setIsPaused((v) => !v);
+      }
+      if (event.key === 'ArrowRight') {
+        setPhotoIndex((i) => (i + 1) % Math.max(displayPhotos.length, 1));
+      }
+      if (event.key === 'ArrowLeft') {
+        setPhotoIndex((i) => (i - 1 + displayPhotos.length) % Math.max(displayPhotos.length, 1));
+      }
+      if (event.key.toLowerCase() === 'r') {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [displayPhotos.length]);
+
   const playedKeys = useMemo(() => new Set(playableSlots.slice(0, slotIndex).map((slot) => slot.entryKey)), [playableSlots, slotIndex]);
   const activeEntryKey = activeSlot?.entryKey || '';
   const currentEntry = activeSlot?.entry || null;
@@ -153,7 +227,11 @@ const TVDisplay = () => {
   const clock = useMemo(() => formatClock(now), [now]);
 
   return (
-    <main className="tv-broadcast-screen h-dvh w-screen overflow-hidden bg-[#08080f] text-white">
+    <main
+      onMouseMove={triggerControls}
+      onTouchStart={triggerControls}
+      className="tv-broadcast-screen relative h-dvh w-screen overflow-hidden bg-[#08080f] text-white select-none"
+    >
       <TopTicker messages={tickerMessages} />
 
       <BroadcastHeader clock={clock} date={scheduleDate} />
@@ -189,13 +267,80 @@ const TVDisplay = () => {
           activePhotoIndex={activePhotoIndex}
           setPhotoIndex={setPhotoIndex}
           loopHold={loopHold}
+          isPaused={isPaused}
         />
       </section>
 
       <BottomTicker messages={tickerMessages} />
+
+      {/* Professional TV Controls Toolbar */}
+      <TVControlsToolbar
+        isPaused={isPaused}
+        onTogglePause={() => setIsPaused((v) => !v)}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onRefresh={() => window.location.reload()}
+        showControls={showControls}
+      />
     </main>
   );
 };
+
+const TVControlsToolbar = ({ isPaused, onTogglePause, isFullscreen, onToggleFullscreen, onRefresh, showControls }) => (
+  <aside
+    aria-label="టీవీ నియంత్రణలు"
+    className={`tv-controls-floating fixed bottom-12 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${showControls ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto' : 'opacity-0 translate-y-4 scale-95 pointer-events-none'}`}
+  >
+    <div className="flex items-center gap-3 rounded-2xl border border-yellow-500/40 bg-[#080812]/92 px-4 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+      <div className="flex items-center gap-2 pr-3 border-r border-white/15">
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+        </span>
+        <span className="telugu text-xs font-black tracking-wide text-white/90">సజీవ ప్రసారం • 4K</span>
+      </div>
+
+      <button
+        type="button"
+        onClick={onTogglePause}
+        className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white transition hover:bg-yellow-500/25 hover:text-tdp-yellow"
+        title="స్ペース Key"
+      >
+        {isPaused ? <Play size={13} className="text-tdp-yellow" /> : <Pause size={13} />}
+        <span>{isPaused ? 'ప్రారంభించు' : 'నిలుపు'}</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleFullscreen}
+        className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white transition hover:bg-yellow-500/25 hover:text-tdp-yellow"
+        title="F Key"
+      >
+        {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+        <span>{isFullscreen ? 'చిన్నది' : 'స్క్రీన్ నింపు'}</span>
+      </button>
+
+      <a
+        href="/tv/pdf"
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1.5 rounded-xl bg-yellow-500/20 border border-yellow-500/40 px-3 py-1.5 text-xs font-black text-tdp-yellow transition hover:bg-yellow-500 hover:text-black"
+      >
+        <FileText size={13} />
+        <span>PDF ప్రసారం</span>
+      </a>
+
+      <button
+        type="button"
+        onClick={onRefresh}
+        className="grid h-7 w-7 place-items-center rounded-xl bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+        title="R Key"
+      >
+        <RefreshCw size={13} />
+      </button>
+    </div>
+  </aside>
+);
 
 const TopTicker = ({ messages }) => (
   <div className="tv-top-ticker">

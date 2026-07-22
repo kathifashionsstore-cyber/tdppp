@@ -916,40 +916,48 @@ textarea {
 
 .tv-broadcast-screen {
   display: grid;
-  grid-template-rows: 32px 166px minmax(0, 1fr) 42px;
+  grid-template-rows: 34px 80px minmax(0, 1fr) 38px !important;
   font-family: 'Poppins', var(--font-body);
+  background: #080003 !important;
 }
 .tv-top-ticker {
   display: flex;
   align-items: center;
   overflow: hidden;
-  background: linear-gradient(90deg, #FFD700 0%, #F5A623 48%, #FFD700 100%);
-  color: #1a1a1a;
+  background: #FFD700 !important;
+  color: #7f0000 !important;
   white-space: nowrap;
+  border-bottom: 2px solid #dc2626;
+  font-weight: 900;
 }
 .tv-top-ticker-track {
   display: inline-flex;
   width: max-content;
   min-width: 200%;
   align-items: center;
-  animation: tvMarqueeLeft 25s linear infinite;
+  animation: tvMarqueeLeft 28s linear infinite;
 }
 .tv-top-ticker-track span {
   display: inline-flex;
   align-items: center;
   gap: 16px;
   padding-right: 24px;
-  font-size: 12px;
-  font-weight: 1000;
+  font-size: 13px;
+  font-weight: 900;
+  color: #7f0000;
 }
 .tv-top-ticker-track b,
 .tv-bottom-ticker-track b {
-  color: #FFD700;
-  font-weight: 1000;
+  color: #dc2626;
+  font-weight: 900;
 }
 .tv-broadcast-header {
-  background: linear-gradient(135deg, #0a0a1a, #1a1000 48%, #0a0a1a);
-  border-bottom: 1px solid rgba(255,215,0,.48);
+  min-height: 80px !important;
+  max-height: 80px !important;
+  height: 80px !important;
+  background: linear-gradient(135deg, #8b0000 0%, #300002 50%, #8b0000 100%) !important;
+  border-bottom: 3px solid #FFD700 !important;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.4);
 }
 .tv-broadcast-header::after {
   content: '';
@@ -957,43 +965,28 @@ textarea {
   right: 0;
   bottom: 0;
   left: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #FFD700, transparent);
-  animation: tvHeaderGoldLine 3s ease-in-out infinite;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #FFD700, #ffffff, #FFD700, transparent);
 }
 .tv-header-particles {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.tv-header-particles span {
-  position: absolute;
-  bottom: -16px;
-  left: var(--x);
-  height: var(--size);
-  width: var(--size);
-  border-radius: 9999px;
-  background: rgba(255,215,0,.88);
-  box-shadow: 0 0 10px rgba(255,215,0,.82);
-  animation: tvHeaderParticleRise 8s linear infinite;
-  animation-delay: var(--delay);
+  display: none !important;
 }
 .tv-logo-frame {
   position: relative;
   display: grid;
-  height: 104px;
-  width: 104px;
+  height: 60px !important;
+  width: 60px !important;
   place-items: center;
   border-radius: 9999px;
-  background: rgba(255,255,255,.92);
-  animation: tvLogoGlowPulse 3s ease-in-out infinite;
+  background: #ffffff !important;
+  border: 3px solid #FFD700 !important;
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.75) !important;
 }
 .tv-logo-frame img {
   position: relative;
   z-index: 2;
-  height: 80px;
-  width: 80px;
+  height: 48px !important;
+  width: 48px !important;
   object-fit: contain;
 }
 .tv-logo-ring {
@@ -1155,213 +1148,127 @@ textarea {
   min-height: 0;
 }
 .tv-news-left-panel {
-  border-right: 1px solid rgba(255,215,0,.25);
-  animation: panelColorCycle 16s ease-in-out infinite;
+  background: linear-gradient(180deg, rgba(140, 0, 0, 0.45) 0%, rgba(15, 0, 5, 0.96) 100%) !important;
+  border-right: 2px solid #FFD700 !important;
 }
 .tv-news-left-panel::before {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
   width: 4px;
-  background: linear-gradient(180deg, #FFD700, #dc2626, #22c55e, #FFD700);
-  background-size: 100% 260%;
-  animation: leftEdgeColorFlow 8s ease-in-out infinite;
+  background: linear-gradient(180deg, #FFD700, #dc2626, #FFD700);
 }
-.tv-news-left-panel::after {
-  background: rgba(255,215,0,.24);
-}
-.tv-news-left-panel.is-flashing::before {
-  filter: drop-shadow(0 0 18px rgba(255,215,0,1));
-}
-.tv-left-panel-watermark {
+.tv-news-left-panel-watermark {
   position: absolute;
   left: 14px;
   top: 14px;
   height: 40px;
   width: 40px;
   background: url('/logo.webp') center / contain no-repeat;
-  opacity: .08;
+  opacity: .12;
   pointer-events: none;
-}
-.tv-left-panel-watermark::after {
-  content: 'నరసరావుపేట నియోజకవర్గం';
-  position: fixed;
-  right: calc(68vw + 18px);
-  bottom: 54px;
-  color: rgba(255,255,255,.1);
-  font-family: var(--font-telugu);
-  font-size: 16px;
-  font-weight: 900;
-  white-space: nowrap;
 }
 .tv-live-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #ef4444;
+  color: #ffffff !important;
+  background: #dc2626 !important;
+  border: 1px solid #FFD700 !important;
   font-size: 11px;
-  font-weight: 1000;
+  font-weight: 900;
   letter-spacing: .08em;
   text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 9999px;
 }
 .tv-live-pill span,
 .tv-live-dot {
   display: block;
-  height: 10px;
-  width: 10px;
+  height: 8px;
+  width: 8px;
   border-radius: 9999px;
-  background: #dc2626;
-  animation: tvLiveGlow 800ms ease-in-out infinite;
+  background: #FFD700;
+  box-shadow: 0 0 8px #FFD700;
 }
 .tv-timeline-row {
   min-height: 68px;
-  border-left-width: 3px;
+  border-left-width: 4px;
   border-radius: 8px;
-  background: rgba(30,30,50,.6);
+  background: rgba(30, 5, 10, 0.65);
 }
 .tv-timeline-row + .tv-timeline-row {
-  border-top: 1px dashed rgba(255,255,255,.08);
+  border-top: 1px dashed rgba(255, 215, 0, 0.15);
 }
 .tv-timeline-row.played {
   min-height: 64px;
-  border-color: rgba(22,101,52,.58);
-  border-left-color: #166534;
-  background: rgba(5,16,5,.8);
-  opacity: .86;
+  border-color: rgba(34, 197, 94, 0.45);
+  border-left-color: #16a34a;
+  background: rgba(10, 25, 10, 0.75);
+  opacity: .88;
 }
 .tv-timeline-row.active {
-  min-height: 92px;
-  border-color: rgba(255,215,0,.74);
-  border-left-color: #FFD700;
-  border-left-width: 4px;
-  animation: liveRowGoldPulse 1s ease-in-out infinite;
-  box-shadow: inset 3px 0 12px #FFD700, 3px 0 12px rgba(255,215,0,.5), 0 0 20px rgba(255,215,0,.24);
-  padding-block: 14px;
+  min-height: 90px;
+  border-color: #FFD700 !important;
+  border-left-color: #dc2626 !important;
+  border-left-width: 6px !important;
+  background: linear-gradient(90deg, rgba(220, 38, 38, 0.45) 0%, rgba(255, 215, 0, 0.15) 100%) !important;
+  box-shadow: inset 3px 0 14px rgba(220, 38, 38, 0.6), 0 0 18px rgba(255, 215, 0, 0.35) !important;
+  padding-block: 12px;
 }
 .tv-timeline-row.upcoming {
-  border-color: rgba(55,65,81,.6);
-  border-left-color: #374151;
+  border-color: rgba(255, 215, 0, 0.25);
+  border-left-color: #FFD700;
 }
 .tv-time-text {
   font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
 }
 .tv-time-text.active {
   font-size: 22px;
-  text-shadow: 0 0 10px #FFD700, 0 0 20px rgba(255,215,0,.6);
+  color: #FFD700 !important;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
 }
 .tv-time-text.played {
   font-size: 17px;
+  color: #86efac;
 }
 .tv-activity-text {
   font-size: 14px;
+  color: rgba(255, 255, 255, 0.95);
 }
 .tv-activity-text.active {
   font-size: 15px;
+  color: #ffffff;
 }
 .tv-activity-text.played {
   font-size: 13px;
-}
-.tv-timeline-dot.upcoming {
-  height: 18px;
-  width: 18px;
-  border-color: #6b7280;
-  background: transparent;
-}
-.tv-timeline-dot.active {
-  height: 32px;
-  width: 32px;
-}
-.tv-car-marker {
-  left: 0;
-  height: 36px;
-  width: 48px;
-}
-.tv-car-marker.is-moving .tv-car-shell {
-  transform: rotate(8deg);
-}
-.tv-car-marker.has-arrived .tv-car-shell {
-  animation: tvRowActivate 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-.tv-speed-line {
-  position: absolute;
-  left: -24px;
-  height: 2px;
-  border-radius: 9999px;
-  background: linear-gradient(90deg, transparent, rgba(255,215,0,.9));
-  filter: blur(.4px);
-  animation: tvCycleTrail .42s ease-out infinite;
-}
-.tv-speed-line.line-1 { top: 9px; width: 26px; }
-.tv-speed-line.line-2 { top: 18px; width: 34px; animation-delay: 80ms; }
-.tv-speed-line.line-3 { top: 27px; width: 22px; animation-delay: 160ms; }
-.tv-dot-ring.ring-3 {
-  animation-delay: 1.2s;
+  color: rgba(255, 255, 255, 0.75);
 }
 .tv-right-panel {
   min-height: 0;
 }
 .tv-photo-stage {
   isolation: isolate;
-  border: 1px solid rgba(255,215,0,.72);
+  border: 2px solid #FFD700 !important;
   background: #000;
-  box-shadow: none;
-}
-.tv-photo-stage::before {
-  display: none;
-}
-.tv-photo-stage::after {
-  display: none;
-}
-.tv-slot-wipe {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  background: linear-gradient(90deg, transparent, rgba(255,215,0,.95), rgba(255,255,255,.75), rgba(255,215,0,.95), transparent);
-  transform: translateX(-110%);
-  animation: tvSlotWipe 800ms ease-out both;
-  pointer-events: none;
-}
-.tv-fallback-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 14;
-  display: grid;
-  place-items: center;
-  color: #FFD700;
-  font-size: 30px;
-  font-weight: 1000;
-  text-shadow: 0 0 18px rgba(255,215,0,.85);
-  animation: tvFallbackPulse 1.6s ease-in-out infinite;
-  pointer-events: none;
 }
 .tv-info-bar {
-  border-top: 2px solid rgba(255,215,0,.4);
-  background: radial-gradient(circle at 0% 20%, rgba(220,38,38,.18), transparent 32%), rgba(0,0,0,.85);
+  border-top: 3px solid #FFD700 !important;
+  background: linear-gradient(90deg, #500003 0%, #150002 100%) !important;
 }
 .tv-live-now-text {
-  color: #ef4444;
-  font-size: 22px;
-  font-weight: 1000;
+  color: #FFD700 !important;
+  font-size: 20px;
+  font-weight: 900;
   letter-spacing: .08em;
   line-height: 1;
   text-transform: uppercase;
-  animation: tvBadgeBlink 600ms ease-in-out infinite;
-}
-.tv-thumbs-heading {
-  display: grid;
-  gap: 7px;
-  justify-items: end;
-}
-.tv-thumbs-heading span {
-  height: 2px;
-  width: min(100%, 250px);
-  border-radius: 9999px;
-  background: linear-gradient(90deg, transparent, #FFD700);
 }
 .tv-thumbs-heading p {
-  color: #FFD700;
+  color: #FFD700 !important;
   font-size: 12px;
-  font-weight: 1000;
+  font-weight: 900;
   letter-spacing: 2px;
   text-transform: uppercase;
 }
@@ -1369,101 +1276,35 @@ textarea {
   height: 58px;
   width: 58px;
   overflow: hidden;
-  border: 2px solid rgba(255,215,0,.62);
+  border: 2px solid rgba(255, 215, 0, 0.6);
   border-radius: 6px;
   background: #111827;
   padding: 0;
   transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
-.tv-thumb img {
-  height: 100%;
-  width: 100%;
-  object-fit: cover;
-}
 .tv-thumb.is-active {
-  border-color: #FFD700;
-  box-shadow: 0 0 16px rgba(255,215,0,.78);
-  transform: scale(1.08);
-  animation: tvPhotoDotPulse 1.5s ease-in-out infinite;
-}
-.tv-extra-count {
-  display: grid;
-  height: 58px;
-  min-width: 58px;
-  place-items: center;
-  border-radius: 6px;
-  background: rgba(17,24,39,.92);
-  color: #fff;
-  font-size: 20px;
-  font-weight: 1000;
-}
-.tv-broadcast-ident {
-  position: absolute;
-  inset: 0;
-  z-index: 13;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 14px;
-  overflow: hidden;
-  background: radial-gradient(circle at center, rgba(255,215,0,.2), transparent 36%), #05050a;
-  text-align: center;
-}
-.tv-broadcast-ident img {
-  height: 132px;
-  width: 132px;
-  border: 4px solid #FFD700;
-  border-radius: 9999px;
-  object-fit: cover;
-  box-shadow: 0 0 32px rgba(255,215,0,.65);
-}
-.tv-broadcast-ident p {
-  color: #FFD700;
-  font-size: 30px;
-  font-weight: 1000;
-  text-shadow: 0 0 18px rgba(255,215,0,.8);
-}
-.tv-broadcast-ident h2 {
-  color: #fff;
-  font-size: 30px;
-  font-weight: 1000;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-.tv-ident-particles {
-  position: absolute;
-  inset: 0;
-}
-.tv-ident-particles span {
-  position: absolute;
-  bottom: -20px;
-  left: var(--x);
-  height: 5px;
-  width: 5px;
-  border-radius: 9999px;
-  background: #FFD700;
-  box-shadow: 0 0 12px rgba(255,215,0,.95);
-  animation: tvIdentGoldDust 3.5s ease-in-out infinite;
-  animation-delay: var(--delay);
+  border-color: #FFD700 !important;
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.85) !important;
+  transform: scale(1.06);
 }
 .tv-bottom-ticker {
   display: grid;
-  grid-template-columns: 50px 1px minmax(0,1fr) 92px;
+  grid-template-columns: 50px 1px minmax(0, 1fr) 92px;
   align-items: center;
   overflow: hidden;
-  border-top: 1px solid rgba(255,215,0,.4);
-  background: #0a0a0a;
-  color: #FFD700;
+  border-top: 2px solid #FFD700 !important;
+  background: #dc2626 !important;
+  color: #FFD700 !important;
 }
 .tv-bottom-star {
   display: grid;
   place-items: center;
   font-size: 22px;
-  animation: announcementIconRotate 8s linear infinite;
+  color: #FFD700 !important;
 }
 .tv-bottom-divider {
   height: 26px;
-  background: rgba(255,215,0,.55);
+  background: #FFD700 !important;
 }
 .tv-bottom-ticker-window {
   min-width: 0;
@@ -1482,20 +1323,21 @@ textarea {
   align-items: center;
   gap: 18px;
   padding-right: 28px;
-  color: #fff;
+  color: #ffffff !important;
   font-size: 15px;
-  font-weight: 1000;
+  font-weight: 900;
 }
 .tv-bottom-ticker-track span.telugu {
-  color: #FFD700;
+  color: #FFD700 !important;
+  font-weight: 900;
 }
 .tv-bottom-chevrons {
   display: flex;
   justify-content: center;
   gap: 4px;
-  color: #FFD700;
+  color: #FFD700 !important;
   font-size: 24px;
-  font-weight: 1000;
+  font-weight: 900;
 }
 .tv-bottom-chevrons span {
   animation: tvChevronPulse 1s ease-in-out infinite;
